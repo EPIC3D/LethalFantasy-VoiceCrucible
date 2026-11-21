@@ -44,8 +44,9 @@ def _load_profile(cfg: Config, export: Path) -> profile_mod.Profile:
     """Load the profile; speakers new in this game version are added to characters.json first."""
     folder = profile_dir(cfg)
     for name in profile_mod.add_new_characters(folder, lines.speakers(export)):
-        _log.warning("new character '%s' found in the game export – added to %s; give it a reference voice "
-                     "(and check its folder and description) to render its lines", name, folder / "characters.json")
+        _log.warning("new character '%s' found in the game export – added to %s. To render its lines, put a "
+                     "reference clip at %s (and check its folder name and description)", name,
+                     folder / "characters.json", folder / "voices" / "chatterbox" / f"{name}.wav")
     return profile_mod.load(folder)
 
 
@@ -70,9 +71,9 @@ def render(cfg: Config, args: argparse.Namespace) -> int:
     result = build.build(profile, source, engine, load_directions(cfg), store.add, args.only, cfg.render.characters,
                          lang)
     if result.missing_voices:
-        _log.warning("no reference voice for %s – their lines are skipped. Reference voices are a separate "
-                     "download (Voice Crucible voices pack, unzip into %s) or your own files, set in characters.json.",
-                     ", ".join(sorted(result.missing_voices)), profile.folder / "voices")
+        _log.warning("no reference voice for %s – their lines are skipped. Put a clip per character into %s "
+                     "(file names are set in characters.json; see docs/PROFILES.md).",
+                     ", ".join(sorted(result.missing_voices)), profile.folder / "voices" / engine.replace("qwen_vc", "acting"))
     if not result.lines:
         _log.error("nothing to queue")
         return 1

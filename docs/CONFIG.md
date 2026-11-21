@@ -17,8 +17,8 @@ wrong values are reported with section and name.
 ## Profiles
 
 Characters, reference voices, acting notes, pronunciation and the director brief live in a **profile**
-(`profiles\<name>\`, chosen with `[render] profile`, default `lethalfantasy`). Profiles are installed
-from separate packs and are never changed by program updates – see [PROFILES.md](PROFILES.md).
+(`profiles\<name>\`, chosen with `[render] profile`, default `lethalfantasy`). You create it from the
+template (`crucible.cmd profile new <name>`); program updates never change it – see [PROFILES.md](PROFILES.md).
 
 ## Other languages
 

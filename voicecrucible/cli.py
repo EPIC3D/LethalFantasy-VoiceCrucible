@@ -23,7 +23,7 @@ COMMANDS = {
     "config": "show the effective configuration and check it for errors",
     "diagnose": "collect technical facts for a bug report (personal data removed)",
     "update": "check GitHub for a new version and install it after you confirm (signature verified)",
-    "profile": "install a profile pack (characters, voices, notes) or list the installed profiles",
+    "profile": "create a profile from the template (new), list profiles, or install a shared profile pack",
 }
 
 
@@ -61,8 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--components", default="", help="comma-separated, e.g. checks,chatterbox,qwen,seedvc "
                    "(default: asked; see downloads.toml)")
     s.add_argument("--yes", action="store_true", help="answer every question with its default")
-    cmds["profile"].add_argument("action", choices=["install", "list"])
-    cmds["profile"].add_argument("zip", nargs="?", type=Path, help="profile pack zip (for install)")
+    cmds["profile"].add_argument("action", choices=["new", "list", "install"])
+    cmds["profile"].add_argument("target", nargs="?", default="",
+                                 help="new: profile name (e.g. lethalfantasy); install: a profile pack zip")
     cmds["update"].add_argument("--rollback", action="store_true", help="go back to the version before the last update")
     d = cmds["direct"]
     d.add_argument("--lines", type=Path, required=True, help="folder with the plugin's line export")
@@ -172,8 +173,10 @@ def _with_profile(command, cfg: config_mod.Config, args: argparse.Namespace) -> 
 def _cmd_profile(cfg: config_mod.Config, args: argparse.Namespace) -> int:
     """Install or list profiles."""
     from voicecrucible.installer import profiles
+    if args.action == "new":
+        return profiles.new_command(args.target)
     if args.action == "install":
-        return profiles.install_command(args.zip)
+        return profiles.install_command(Path(args.target) if args.target else None)
     return profiles.list_command(cfg.render.profile)
 
 

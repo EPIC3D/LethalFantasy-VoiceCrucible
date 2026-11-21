@@ -14,9 +14,10 @@ removed) into `logs\diagnose.txt`. Logs of every command are in `logs\`.
 | Worker: "not paired or pairing revoked" | Pair again (`pair.cmd`). |
 | Worker: "too old for the coordinator" | Update the worker (`crucible.cmd update`). |
 | Worker: "GPU out of memory" | Handled automatically (smaller batches). If it repeats, lower `[worker] max_batch` or close other GPU programs. |
-| `render`: "profile … is not installed" | Install the profile pack (`crucible.cmd profile install <zip>`) or check `[render] profile`. |
-| `render`: "no reference voice for …" | The profile has no voice file for that character – install a newer profile pack, or add a clip and set it in `characters.json`. |
-| `render`: "new character … found" | A new game version added a speaker; give it a reference voice in `characters.json`. |
+| `render`: "profile … does not exist yet" | Create it: `crucible.cmd profile new lethalfantasy` ([PROFILES.md](PROFILES.md)), or check `[render] profile`. |
+| `render`: "no reference voice for …" | Put a clip for that character into the profile's `voices\` folder, named as in `characters.json`. |
+| `render`: "new character … found" | A new speaker in the game export was added to `characters.json`; check its `folder` and add a reference clip. |
+| Rendered files land in a folder the plugin does not read | Set each character's `folder` in `characters.json` to the plugin's folder name (LethalFantasy: `AKIPO`, `RED`, `BLUE`). |
 | `qwen_vc`: "Seed-VC … not found" | Install the Seed-VC component (`setup.cmd`, answer yes) or use another engine. |
 | Many lines fail a check | See `output\report.tsv` for the reasons. Strong emotions sometimes fail the voice match – retries usually fix it. |
 | Watcher page shows 404 | The watcher is http://127.0.0.1:5132 on the coordinator computer (`watcher.cmd`), not port 5130 and not on a worker. |

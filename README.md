@@ -17,7 +17,7 @@ one machine or several on your local network.
 ```mermaid
 flowchart TD
     G[Your game + LethalFantasy TTS plugin<br/>line export] --> R[crucible render<br/>coordinator PC]
-    P[Profile pack<br/>characters, voices, acting notes] --> R
+    P[Your profile<br/>characters, reference voices, acting notes] --> R
     D[Optional: directions.json<br/>crucible direct / AI] -.-> R
     R --> Q[(Job queue)]
     Q <-->|encrypted, paired| W1[Worker PC 1]
@@ -34,8 +34,8 @@ flowchart TD
 
 1. Unzip into a folder on an SSD (e.g. `D:\VoiceCrucible`), run **`setup.cmd`** – it shows what it will
    download and asks first.
-2. Install the **LethalFantasy profile pack** (characters, reference voices, acting notes – a separate
-   download): `crucible.cmd profile install VoiceCrucible-Profile-LethalFantasy.zip`.
+2. Create your **profile** (characters and their reference voices): `crucible.cmd profile new lethalfantasy`,
+   then add one reference clip per character – [docs/PROFILES.md](docs/PROFILES.md) shows the few steps.
 3. Export the game's lines with the plugin (`[Developer] ExportLines = true`, start the game once).
 4. Run `coordinator.cmd`, then once `pair.cmd` (code from the coordinator), then `worker.cmd`.
 5. `crucible.cmd render --lines "<game>\BepInEx\LethalFantasyTTS"` – watch it with `watcher.cmd`.

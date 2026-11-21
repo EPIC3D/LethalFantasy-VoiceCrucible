@@ -48,7 +48,8 @@ def add_new_characters(folder: Path, names: set[str]) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     added = sorted(n for n in names if n not in data and not n.startswith("_"))
     for name in added:
-        data[name] = {"folder": name.upper(), "prefix": f"{name.upper()}_DIALOGUE_", "voices": {},
+        data[name] = {"folder": name.upper(), "prefix": f"{name.upper()}_DIALOGUE_",
+                      "voices": {"chatterbox": f"voices/chatterbox/{name}.wav", "qwen_vc": f"voices/acting/{name}.wav"},
                       "bible": f"{name}, a character of LethalFantasy.", "persona": f"{name}.",
                       "chatterbox_adjust": [0.0, 0.0], "_added_automatically": "check folder, prefix, voices and bible"}
     if added:
@@ -71,8 +72,8 @@ def load(folder: Path) -> Profile:
     """Load a profile folder (see profiles/template for the format)."""
     if not (folder / "characters.json").exists():
         raise ProfileMissing(
-            f"profile '{folder.name}' is not installed ({folder}). Install a profile pack with "
-            "'crucible profile install <zip>', or copy profiles/template to make your own and set [render] profile.")
+            f"profile '{folder.name}' does not exist yet ({folder}). Create it from the template with "
+            f"'crucible profile new {folder.name}' (see docs/PROFILES.md), or install a profile pack.")
     chars = {}
     for name, c in _json(folder / "characters.json").items():
         chars[name] = Character(name=name, folder=c["folder"], prefix=c["prefix"],

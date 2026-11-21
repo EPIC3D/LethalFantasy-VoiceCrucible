@@ -54,11 +54,11 @@ def test_restarted_worker_gets_its_old_lines_back_without_penalty(tmp_path):
 
 
 def test_lost_worker_lease_expires_and_heartbeat_extends(tmp_path):
-    q = _queue(tmp_path, lease_seconds=0.2)
+    q = _queue(tmp_path, lease_seconds=1.0)  # generous margins: timing tests must not be flaky on slow machines
     job = q.claim("alive", 1)
     q.claim("lost", 1)
-    time.sleep(0.15)
+    time.sleep(0.6)
     q.touch("alive", job.job_id)
-    time.sleep(0.1)
+    time.sleep(0.6)
     assert q.expire() == 1
     assert q.counts() == {"pending": 4, "leased": 1, "done": 0, "failed": 0}

@@ -104,6 +104,18 @@ def test_install_keeps_user_data_and_rollback_restores(tmp_path):
     assert (tmp_path / "app.py").read_text() == "old" and not (tmp_path / "previous").exists()
 
 
+def test_new_profile_from_template(tmp_path):
+    import shutil
+    from voicecrucible.installer import profiles
+    shutil.copytree(Path(__file__).parents[1] / "profiles" / "template", tmp_path / "profiles" / "template")
+    target = profiles.new_profile("mygame", tmp_path)
+    assert (target / "voices" / "chatterbox").is_dir()
+    assert '"name": "mygame"' in (target / "profile.json").read_text()
+    assert "CharacterA" not in (target / "characters.json").read_text()  # speakers come from the export
+    with pytest.raises(profiles.ProfileError, match="already exists"):
+        profiles.new_profile("mygame", tmp_path)
+
+
 def test_profile_pack_install_update_and_backup(tmp_path):
     from voicecrucible.installer import profiles
     src = Path(__file__).parent / "data" / "profile"
