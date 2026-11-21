@@ -48,6 +48,12 @@ def test_runner_reports_failed_take(monkeypatch):
     assert res[0].audio[:4] == b"OggS"  # failed takes are sent too: the best one is used if every attempt fails
 
 
+def test_installed_extras_detects_components():
+    from voicecrucible.installer import update
+    extras = update.installed_extras()
+    assert isinstance(extras, list) and set(extras) <= {"gpu", "checks", "chatterbox", "qwen"}
+
+
 def test_runner_encodes_passed_take_as_ogg():
     res = Runner("cpu").render(Job("j", "test", [Line(key="K", character="MIRA", text="hi", uid=1)]))
     assert res[0].passed and res[0].ext == "ogg" and res[0].audio[:4] == b"OggS"

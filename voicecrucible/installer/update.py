@@ -207,7 +207,36 @@ def download_and_install(rel: dict) -> str:
     verify(data, _get(rel["sig"]).decode("ascii"))
     version = check_newer(data)
     install(data)
+    resync_components()
     return version
+
+
+# installed component -> the module that shows it is installed
+_COMPONENT_MODULES = {"gpu": "torch", "checks": "whisper", "chatterbox": "chatterbox", "qwen": "qwen_tts"}
+
+
+def installed_extras() -> list[str]:
+    """Components (uv extras) installed in this environment."""
+    import importlib.util
+    return [extra for extra, module in _COMPONENT_MODULES.items() if importlib.util.find_spec(module) is not None]
+
+
+def resync_components(root: Path = layout.ROOT) -> None:
+    """After an update: install packages the new version needs for the components already installed.
+
+    `--inexact` never removes anything. Failures are reported, not fatal – setup.cmd can repair it.
+    """
+    import os
+    import subprocess
+    uv = os.environ.get("VC_UV") or str(root / "uv.exe")
+    extras = installed_extras()
+    cmd = [uv, "sync", "--frozen", "--inexact", "--project", str(root)] + [a for x in extras for a in ("--extra", x)]
+    try:
+        code = subprocess.run(cmd, env={**os.environ, **layout.environment(root)}).returncode
+    except OSError as e:
+        code = str(e)
+    if code != 0:
+        _log.warning("could not update the installed components (%s) – run setup.cmd once", code)
 
 
 def outdated_workers(watcher_port: int, target: str) -> list[str]:

@@ -32,6 +32,10 @@ class PairingError(RuntimeError):
     """Pairing failed; the message says why and what to do."""
 
 
+class MissingComponent(RuntimeError):
+    """A job needs an engine or check whose packages are not installed on this worker."""
+
+
 class NotPaired(RuntimeError):
     """The worker has no valid pairing (never paired, or revoked on the coordinator)."""
 
@@ -178,6 +182,11 @@ class WorkerClient:
         self._busy_lines = len(job.lines)
         try:
             takes = self.runner.render(job)
+        except (ImportError, seedvc.SeedVCNotInstalled) as e:  # this machine lacks a component: not the lines' fault
+            self._release(job, "", failed=False)
+            self.stop.set()
+            raise MissingComponent(f"{e} – a component for engine '{job.engine}' is missing on this worker. "
+                                   "Run setup.cmd here (it reinstalls from the cache), then start the worker again.") from e
         except Exception as e:
             _log.exception("job %s failed", job.job_id[:8])
             self._release(job, f"worker error: {e}", failed=True)
@@ -274,7 +283,7 @@ def run(cfg: Config) -> int:
         client.run()
     except KeyboardInterrupt:
         _log.info("stopped")
-    except NotPaired as e:
+    except (NotPaired, MissingComponent) as e:
         _log.error("%s", e)
         return 1
     except FingerprintMismatch as e:

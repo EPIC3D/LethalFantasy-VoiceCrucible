@@ -128,6 +128,13 @@ class JobQueue:
             self._requeue_locked([uid], reason, count_attempt=True)
             return self._db.execute("SELECT status FROM lines WHERE uid = ?", (uid,)).fetchone()[0]
 
+    def retry_failed(self) -> int:
+        """Put every line that failed for good back into the queue with fresh attempts. Returns how many."""
+        with self._lock:
+            cur = self._db.execute("UPDATE lines SET status = 'pending', attempts = 0, reason = '', output = '',"
+                                   " best_take = '', best_score = -1 WHERE status = 'failed'")
+            return cur.rowcount
+
     def best_take(self, uid: int) -> str:
         """Stored file of the best failed take of a line ('' if none)."""
         with self._lock:

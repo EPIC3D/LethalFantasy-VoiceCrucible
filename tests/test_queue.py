@@ -47,6 +47,14 @@ def test_best_failed_take_is_remembered(tmp_path):
     assert q.best_take(job.lines[0].uid) == "t1.ogg"  # higher quality wins
 
 
+def test_retry_failed_gives_fresh_attempts(tmp_path):
+    q = _queue(tmp_path, max_attempts=1)
+    job = q.claim("w1", 1)
+    q.finish(job.job_id, job.lines[0].uid, False, "broken")
+    assert q.counts()["failed"] == 1 and q.retry_failed() == 1
+    assert q.counts()["failed"] == 0 and q.claim("w1", 1).lines[0].attempt == 1
+
+
 def test_release_without_counting(tmp_path):
     q = _queue(tmp_path, max_attempts=1)
     job = q.claim("w1", 5)
