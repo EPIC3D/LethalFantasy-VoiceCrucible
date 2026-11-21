@@ -1,4 +1,5 @@
 @echo off
+title Voice Crucible - setup
 rem Voice Crucible setup. It only runs the bundled uv.exe: first a small base environment, then
 rem "crucible setup", which shows every download (source, size, license) and asks before installing.
 rem --inexact: this first step never removes components that are already installed.
