@@ -7,6 +7,7 @@ from itertools import groupby
 from pathlib import Path
 from urllib.parse import urlparse
 
+from voicecrucible.coordinator import results
 from voicecrucible.coordinator.assets import AssetStore
 from voicecrucible.coordinator.discovery import is_local_address
 from voicecrucible.coordinator.run import profile_dir
@@ -38,6 +39,14 @@ def load_directions(cfg: Config) -> dict[str, dict]:
             return {}
         return directions.load(path)
     return {}
+
+
+def _has_output(root: Path, language: str, line) -> bool:
+    """True when a voice file for this line already exists in the output folder."""
+    try:
+        return any(results.output_path(root, language, line, ext).exists() for ext in results.AUDIO_EXTENSIONS)
+    except results.UnsafeName:
+        return False
 
 
 def _load_profile(cfg: Config, export: Path) -> profile_mod.Profile:
@@ -77,7 +86,14 @@ def render(cfg: Config, args: argparse.Namespace) -> int:
     if not result.lines:
         _log.error("nothing to queue")
         return 1
-    queued = result.lines[:args.limit] if args.limit else result.lines
+    lines_to_queue = result.lines
+    if not args.all:  # extend a pack: lines that already have a voice file are not rendered again
+        output_root = cfg.path(cfg.paths.output_dir)
+        lines_to_queue = [ln for ln in result.lines if not _has_output(output_root, lang, ln)]
+        if len(lines_to_queue) < len(result.lines):
+            _log.info("skipped %d line(s): already rendered (use --all to render them again)",
+                      len(result.lines) - len(lines_to_queue))
+    queued = lines_to_queue[:args.limit] if args.limit else lines_to_queue
     for reason, n in sorted(result.skipped.items()):
         _log.info("skipped %d line(s): %s", n, reason)
     if args.dry_run:
@@ -150,7 +166,8 @@ def report(cfg: Config, _args: argparse.Namespace) -> int:
         f.write("folder\tfile\tstate\tattempts\treason\n")
         for p in problems:
             stem = p["key"] + (f"__{p['variant']}" if p["variant"] else "")
-            f.write(f"{p['character']}\t{stem}\t{p['status']}\t{p['attempts']}\t{p['reason']}\n")
+            state = "failed – best take used" if p["status"] == "failed" and p["best_take_used"] else p["status"]
+            f.write(f"{p['character']}\t{stem}\t{state}\t{p['attempts']}\t{p['reason']}\n")
     print(" · ".join(f"{k}: {v}" for k, v in counts.items()))
     print(f"{len(problems)} line(s) with problems listed in {out}")
     return 0

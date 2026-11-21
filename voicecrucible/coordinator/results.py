@@ -30,6 +30,18 @@ def output_path(root: Path, language: str, line: Line, ext: str) -> Path:
     return root / "voices" / language / line.character / f"{line.file_stem}.{ext}"
 
 
+def save_candidate(folder: Path, line: Line, ext: str, data: bytes) -> Path:
+    """Store a failed take (named by queue row and attempt only – no worker-supplied names)."""
+    if ext not in AUDIO_EXTENSIONS:
+        raise UnsafeName(f"audio type not allowed: {ext!r}")
+    if len(data) > MAX_AUDIO_BYTES:
+        raise ValueError("audio file too large")
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"{int(line.uid)}_a{int(line.attempt)}.{ext}"
+    target.write_bytes(data)
+    return target
+
+
 def save(root: Path, language: str, line: Line, ext: str, data: bytes) -> Path:
     """Write one audio file atomically (a half-written file is never left behind)."""
     if len(data) > MAX_AUDIO_BYTES:

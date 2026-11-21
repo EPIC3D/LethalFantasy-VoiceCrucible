@@ -35,7 +35,11 @@ Open a command prompt in the Voice Crucible folder:
 6. When done: `crucible.cmd report`. The voice pack is in `output\voices\en\AKIPO|RED|BLUE\`, lines with
    problems are listed in `output\report.tsv`.
 
-Copy `output\voices\` into the game's `BepInEx\plugins\LethalFantasyTTS\` to use the pack.
+Copy `output\voices\` into the game's `BepInEx\plugins\LethalFantasyTTS\` to use the pack. A line that failed
+every check still gets its best take (marked "failed – best take used" in the report).
+
+**After a game update:** export the lines again and run the same `render` command – only the new lines are
+rendered, the ones you already have are skipped (`--all` renders everything again).
 
 More machines: [WORKERS.md](WORKERS.md). Settings: [CONFIG.md](CONFIG.md). Problems: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 

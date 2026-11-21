@@ -26,10 +26,12 @@ CREATE TABLE IF NOT EXISTS lines (
     attempts INTEGER NOT NULL DEFAULT 0,
     lease_id TEXT, worker TEXT, lease_until REAL,
     reason TEXT NOT NULL DEFAULT '', output TEXT NOT NULL DEFAULT '',
+    best_take TEXT NOT NULL DEFAULT '', best_score REAL NOT NULL DEFAULT -1,
     UNIQUE (key, character, variant, engine)
 );
 CREATE INDEX IF NOT EXISTS idx_lines_status ON lines (status);
 """
+_ADDED_COLUMNS = {"best_take": "TEXT NOT NULL DEFAULT ''", "best_score": "REAL NOT NULL DEFAULT -1"}
 
 STATUSES = ("pending", "leased", "done", "failed")
 _LINE_COLUMNS = "uid, key, character, variant, text, emotion, direction, voice, params, attempts"
@@ -49,6 +51,10 @@ class JobQueue:
         self._db = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None, timeout=30)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(_SCHEMA)
+        have = {r[1] for r in self._db.execute("PRAGMA table_info(lines)")}
+        for name, definition in _ADDED_COLUMNS.items():  # queues made by older versions
+            if name not in have:
+                self._db.execute(f"ALTER TABLE lines ADD COLUMN {name} {definition}")
         self._lock = threading.Lock()
         self.lease_seconds = lease_seconds
         self.max_attempts = max_attempts
@@ -101,19 +107,37 @@ class JobQueue:
         with self._lock:
             return {r[0] for r in self._db.execute("SELECT DISTINCT voice FROM lines WHERE voice != ''")}
 
-    def finish(self, lease_id: str, uid: int, passed: bool, reason: str = "", output: str = "") -> bool:
-        """Record the result of one leased line. A failed line is retried later. False = lease not valid any more."""
+    def finish(self, lease_id: str, uid: int, passed: bool, reason: str = "", output: str = "",
+               take: str = "", score: float = -1.0) -> str | None:
+        """Record the result of one leased line; returns its new status, or None when the lease is not valid any more.
+
+        A failed take with audio (`take` = stored file, `score` = its quality) is kept as a candidate: when the line
+        runs out of attempts, the caller exports the best candidate (best_take()) as the line's output.
+        """
         with self._lock:
-            held = self._db.execute("SELECT 1 FROM lines WHERE uid = ? AND lease_id = ? AND status = 'leased'",
+            held = self._db.execute("SELECT best_score FROM lines WHERE uid = ? AND lease_id = ? AND status = 'leased'",
                                     (uid, lease_id)).fetchone()
             if held is None:
-                return False
+                return None
             if passed:
                 self._db.execute("UPDATE lines SET status = 'done', output = ?, reason = '', lease_id = NULL,"
                                  " lease_until = NULL WHERE uid = ?", (output, uid))
-            else:
-                self._requeue_locked([uid], reason, count_attempt=True)
-            return True
+                return "done"
+            if take and score > held[0]:
+                self._db.execute("UPDATE lines SET best_take = ?, best_score = ? WHERE uid = ?", (take, score, uid))
+            self._requeue_locked([uid], reason, count_attempt=True)
+            return self._db.execute("SELECT status FROM lines WHERE uid = ?", (uid,)).fetchone()[0]
+
+    def best_take(self, uid: int) -> str:
+        """Stored file of the best failed take of a line ('' if none)."""
+        with self._lock:
+            r = self._db.execute("SELECT best_take FROM lines WHERE uid = ?", (uid,)).fetchone()
+        return r[0] if r else ""
+
+    def set_output(self, uid: int, output: str) -> None:
+        """Record the exported file of a line that failed every check (its best take)."""
+        with self._lock:
+            self._db.execute("UPDATE lines SET output = ? WHERE uid = ?", (output, uid))
 
     def release(self, lease_id: str, worker: str, reason: str, count_attempt: bool) -> int:
         """Give back every line the worker still holds under a lease. `count_attempt` = False when it just stopped."""
@@ -143,10 +167,10 @@ class JobQueue:
     def recent_problems(self, limit: int = 20) -> list[dict[str, str]]:
         """Lines with a failure reason (failed for good, or waiting for a retry), newest first."""
         with self._lock:
-            rows = self._db.execute("SELECT key, character, variant, status, attempts, reason FROM lines"
+            rows = self._db.execute("SELECT key, character, variant, status, attempts, reason, output FROM lines"
                                     " WHERE reason != '' ORDER BY uid DESC LIMIT ?", (limit,)).fetchall()
-        return [{"key": r[0], "character": r[1], "variant": r[2], "status": r[3], "attempts": r[4], "reason": r[5]}
-                for r in rows]
+        return [{"key": r[0], "character": r[1], "variant": r[2], "status": r[3], "attempts": r[4], "reason": r[5],
+                 "best_take_used": bool(r[6])} for r in rows]
 
     def _count_locked(self) -> int:
         """Total number of lines (caller holds the lock)."""

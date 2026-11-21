@@ -7,6 +7,11 @@
   works right after setup. Program updates refresh it; your own profiles are never touched.
 - `crucible profile new <name> --from lethalfantasy` makes an editable copy; without `--from` it starts
   empty from the template.
+- **Extending a pack:** `render` skips lines that already have a voice file, so after a game update only the
+  new lines are rendered (`--all` renders everything again).
+- **Lines that fail every check still get a file:** the best take (highest audio quality) is exported and
+  marked in `report.tsv` as "failed – best take used", like the original voice pack pipeline.
+- FAQ: where the lines come from (your game's export) and what Weblate is used for.
 
 ## 0.1.0b2 – 2026-11-21
 

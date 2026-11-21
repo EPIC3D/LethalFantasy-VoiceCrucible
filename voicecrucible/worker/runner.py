@@ -19,13 +19,14 @@ _log = log.get(__name__)
 
 @dataclass
 class TakeResult:
-    """Outcome of one line: encoded audio when passed, a reason when not."""
+    """Outcome of one line: encoded audio (also for a failed take – kept as a fallback), reason, quality score."""
 
     uid: int
     passed: bool
     reason: str = ""
     ext: str = ""
     audio: bytes = b""
+    score: float = -1.0  # audio quality (MOS) of the take, used to pick the best take if every attempt fails
 
 
 class Runner:
@@ -62,13 +63,13 @@ class Runner:
             for line, a in zip(chunk, audios, strict=True):
                 y = audio.pad_lead_in(a.samples, a.sample_rate)
                 take = Candidate(line, y, a.sample_rate, voices.get(line.voice))
-                passed, reason = summary(self._checks.run(take))
-                if passed:
-                    results.append(TakeResult(line.uid, True, ext=self.output_format,
-                                              audio=audio.encode(y, a.sample_rate, self.output_format)))
-                else:
+                checks = self._checks.run(take)
+                passed, reason = summary(checks)
+                score = next((c.score for c in checks if c.check == "quality" and c.score is not None), 0.0)
+                if not passed:
                     _log.info("%s take %d rejected: %s", line.file_stem, line.attempt, reason)
-                    results.append(TakeResult(line.uid, False, reason=reason))
+                results.append(TakeResult(line.uid, passed, reason=reason, ext=self.output_format, score=score,
+                                          audio=audio.encode(y, a.sample_rate, self.output_format)))
             i += len(chunk)
         return results
 

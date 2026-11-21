@@ -10,6 +10,16 @@ profile (`crucible.cmd profile new my-voices --from lethalfantasy`), replace tha
 `voices\chatterbox\` folder and select the profile – see [PROFILES.md](PROFILES.md). Only use voices you have
 the right to use.
 
+### Where do the lines come from? What about new lines on Weblate?
+
+From **your own game**: the LethalFantasy TTS plugin exports them (`[Developer] ExportLines = true`, start the
+game once) – every line with its speaker and facial expression, exactly as your game version has them.
+
+Weblate is only an extra option: `render --texts <file>` takes the texts of another language from it, e.g. for
+a Hungarian pack. New lines are **not** taken from Weblate automatically. Lines that are already on Weblate but
+not in the game yet come in with the next game update: export again and run `render` – only the new lines are
+rendered, the ones you already have are skipped.
+
 ### Can I add a new character?
 
 No. Voice Crucible only voices the dialogue lines of the game (from your game's export) – it cannot create new

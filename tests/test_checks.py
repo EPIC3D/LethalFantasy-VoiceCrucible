@@ -44,7 +44,8 @@ def test_runner_reports_failed_take(monkeypatch):
     monkeypatch.setattr(__import__(__name__), "CHECK", _AlwaysFail, raising=False)
     job = Job("j", "test", [Line(key="K", character="MIRA", text="hi", uid=1)], settings={"enabled": ["fail"]})
     res = Runner("cpu").render(job)
-    assert not res[0].passed and res[0].reason == "fail: for the test" and res[0].audio == b""
+    assert not res[0].passed and res[0].reason == "fail: for the test"
+    assert res[0].audio[:4] == b"OggS"  # failed takes are sent too: the best one is used if every attempt fails
 
 
 def test_runner_encodes_passed_take_as_ogg():

@@ -56,6 +56,7 @@ def build_state(cfg: Config) -> app.CoordinatorState:
         language=cfg.render.language,
         assets=AssetStore(folder / "assets"),
         check_settings=check_settings(cfg),
+        takes_dir=folder / "takes",
     )
 
 

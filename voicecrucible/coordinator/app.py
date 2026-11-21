@@ -38,6 +38,7 @@ class CoordinatorState:
     language: str
     assets: AssetStore
     check_settings: dict
+    takes_dir: Path  # failed takes kept as fallback candidates
 
 
 class ApiError(Exception):
@@ -196,19 +197,35 @@ def _result(state: CoordinatorState, worker: str, body: dict, _address: str) -> 
         if line is None:
             continue
         passed, reason = take.get("passed") is True, str(take.get("reason", ""))[:500]
-        output = ""
-        if passed:
-            try:
-                audio = base64.b64decode(str(take.get("audio", "")), validate=True)
-                path = results.save(state.output_root, state.language, line, str(take.get("ext", "")), audio)
+        ext = str(take.get("ext", ""))
+        output = candidate = ""
+        try:
+            audio = base64.b64decode(str(take.get("audio", "")), validate=True)
+            if passed:
+                path = results.save(state.output_root, state.language, line, ext, audio)
                 output = path.relative_to(state.output_root).as_posix()
-            except (binascii.Error, ValueError) as e:
-                passed, reason = False, f"bad audio from worker: {e}"
-        state.queue.finish(job_id, line.uid, passed, reason, output)
+            elif audio:  # keep a failed take as a fallback, in case every attempt fails
+                candidate = str(results.save_candidate(state.takes_dir, line, ext, audio))
+        except (binascii.Error, ValueError) as e:
+            passed, reason = False, f"bad audio from worker: {e}"
+        score = take.get("score") if isinstance(take.get("score"), (int, float)) else -1.0
+        status = state.queue.finish(job_id, line.uid, passed, reason, output, candidate, float(score))
+        if status == "failed":
+            _export_best_take(state, line)
         accepted += 1
         done, failed = done + passed, failed + (not passed)
     state.registry.record(worker, done, failed)
     return 200, {"accepted": accepted}
+
+
+def _export_best_take(state: CoordinatorState, line) -> None:
+    """A line failed every attempt: export its best take anyway (like the original pipeline) and note it."""
+    best = state.queue.best_take(line.uid)
+    if not best or not Path(best).exists():
+        return
+    path = results.save(state.output_root, state.language, line, Path(best).suffix.lstrip("."), Path(best).read_bytes())
+    state.queue.set_output(line.uid, path.relative_to(state.output_root).as_posix())
+    _log.info("%s failed every check – best take exported, listed in the report", line.file_stem)
 
 
 def _release(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:

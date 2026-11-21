@@ -56,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--only", default="", help="only keys starting with this prefix, e.g. CHARACTER_DIALOGUE_EVENT_HUG")
     r.add_argument("--limit", type=int, default=0, help="queue at most N lines (for a quick test)")
     r.add_argument("--dry-run", action="store_true", help="show what would be queued, queue nothing")
+    r.add_argument("--all", action="store_true", help="also lines that already have a voice file (render them again)")
     r.add_argument("--test", type=int, metavar="N", help="queue N test lines (beep engine, no model needed)")
     s = cmds["setup"]
     s.add_argument("--components", default="", help="comma-separated, e.g. checks,chatterbox,qwen,seedvc "

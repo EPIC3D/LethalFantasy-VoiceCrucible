@@ -185,7 +185,7 @@ class WorkerClient:
         finally:
             self._busy_lines = 0
         self._unsent = {"job_id": job.job_id, "takes": [
-            {"uid": t.uid, "passed": t.passed, "reason": t.reason, "ext": t.ext,
+            {"uid": t.uid, "passed": t.passed, "reason": t.reason, "ext": t.ext, "score": t.score,
              "audio": base64.b64encode(t.audio).decode("ascii")} for t in takes]}
         self._upload(self._unsent)
 

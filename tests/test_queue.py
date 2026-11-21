@@ -23,8 +23,8 @@ def test_claim_and_finish(tmp_path):
     job = q.claim("w1", 3)
     assert len(job.lines) == 3 and q.counts()["leased"] == 3
     assert q.leased_line(job.job_id, job.lines[0].uid, "w2") is None  # other worker
-    assert q.finish(job.job_id, job.lines[0].uid, True, output="a.wav")
-    assert not q.finish(job.job_id, job.lines[0].uid, True)  # already done
+    assert q.finish(job.job_id, job.lines[0].uid, True, output="a.wav") == "done"
+    assert q.finish(job.job_id, job.lines[0].uid, True) is None  # already done
     assert q.counts()["done"] == 1
 
 
@@ -36,6 +36,15 @@ def test_failed_line_retries_then_fails(tmp_path):
         q.finish(job.job_id, job.lines[0].uid, False, reason="silent")
     assert q.counts()["failed"] == 1
     assert q.recent_problems()[0]["reason"] == "silent"
+
+
+def test_best_failed_take_is_remembered(tmp_path):
+    q = _queue(tmp_path, max_attempts=2)
+    job = q.claim("w1", 1)
+    assert q.finish(job.job_id, job.lines[0].uid, False, "noisy", take="t1.ogg", score=2.5) == "pending"
+    job = q.claim("w1", 1)
+    assert q.finish(job.job_id, job.lines[0].uid, False, "other voice", take="t2.ogg", score=1.5) == "failed"
+    assert q.best_take(job.lines[0].uid) == "t1.ogg"  # higher quality wins
 
 
 def test_release_without_counting(tmp_path):
