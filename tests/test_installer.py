@@ -80,6 +80,10 @@ def test_downgrade_is_refused():
     with pytest.raises(update.UpdateError, match="not newer"):
         update.check_newer(older, "0.1.0")
     assert update._version_tuple("0.1.0b2") < update._version_tuple("0.1.0") < update._version_tuple("0.1.1")
+    order = ["0.1.0.dev0", "0.1.0a1", "0.1.0b1", "0.1.0b5", "0.1.0b6.dev0", "0.1.0b6", "0.1.0rc1", "0.1.0", "0.1.1.dev0",
+             "0.1.1", "0.2.0"]  # PEP 440 order
+    keys = [update._version_tuple(v) for v in order]
+    assert keys == sorted(keys) and len(set(keys)) == len(keys)
 
 
 def test_install_keeps_user_data_and_rollback_restores(tmp_path):

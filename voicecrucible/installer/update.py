@@ -52,13 +52,16 @@ def verify(data: bytes, signature_b64: str, public_key_b64: str = PUBLIC_KEY) ->
 
 
 def _version_tuple(v: str) -> tuple:
-    """'0.1.0b2' -> comparable tuple (pre-releases sort before the final version)."""
+    """'0.1.0b2' -> comparable tuple, ordered like PEP 440: 0.1.0.dev0 < 0.1.0a1 < 0.1.0b6.dev0 < 0.1.0b6 < 0.1.0."""
     m = re.match(r"(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?(?:\.dev(\d+))?$", v)
     if not m:
         raise UpdateError(f"unknown version format: {v!r}")
     major, minor, patch, pre, pre_n, dev = m.groups()
     stage = {"a": 0, "b": 1, "rc": 2, None: 3}[pre]
-    return int(major), int(minor), int(patch), stage, int(pre_n or 0), -1 if dev is None else int(dev)
+    if pre is None and dev is not None:
+        stage = -1  # 0.1.0.dev0 comes before every pre-release of 0.1.0
+    dev_key = (0, int(dev)) if dev is not None else (1, 0)  # a .devN comes before the same version without it
+    return int(major), int(minor), int(patch), stage, int(pre_n or 0), dev_key
 
 
 def tag_to_version(tag: str) -> str:
