@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 – unreleased (first beta)
+## 0.1.0b1 – 2026-11-21 (first beta)
 
 Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards, against LethalFantasy beta 1.0.3.
 

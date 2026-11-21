@@ -17,7 +17,7 @@
 | resemblyzer | Apache-2.0 | Apache-2.0 |
 | UTMOS / SpeechMOS | MIT | MIT (+ Apache-2.0 parts) |
 | PyTorch | BSD-3-Clause | – |
-| uv (bundled in the release) | MIT / Apache-2.0 | – |
+| uv (bundled in the release, unchanged; license texts in `third_party/uv/`) | MIT / Apache-2.0 | – |
 
 - Rendered voice files are not covered by these licenses; voice packs made from the game's lines have
   their own terms (see the LethalFantasy TTS repository).

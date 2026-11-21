@@ -62,6 +62,11 @@ def test_signature_is_required_and_checked():
         update.verify(data, sig, "")
 
 
+def test_built_in_public_key_is_valid():
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    Ed25519PublicKey.from_public_bytes(base64.b64decode(update.PUBLIC_KEY))
+
+
 def test_downgrade_is_refused():
     newer, _, _ = _signed_zip({"voicecrucible/__init__.py": '__version__ = "0.2.0"\n'})
     older, _, _ = _signed_zip({"voicecrucible/__init__.py": '__version__ = "0.1.0b1"\n'})
@@ -77,10 +82,15 @@ def test_install_keeps_user_data_and_rollback_restores(tmp_path):
     (tmp_path / "work" / "identity.json").write_text("pairing")
     (tmp_path / "profiles" / "lf" / "voices").mkdir(parents=True)
     (tmp_path / "profiles" / "lf" / "voices" / "Mira.wav").write_text("voice")
-    data, _, _ = _signed_zip({"app.py": "new", "profiles/lf/characters.json": "{}", "work/evil.txt": "no",
-                              "../outside.txt": "no"})
+    data, _, _ = _signed_zip({"VoiceCrucible/voicecrucible/__init__.py": '__version__ = "9.0.0"\n',
+                              "VoiceCrucible/app.py": "new", "VoiceCrucible/profiles/lf/characters.json": "{}",
+                              "VoiceCrucible/profiles/template/x.json": "t", "VoiceCrucible/work/evil.txt": "no",
+                              "VoiceCrucible/../outside.txt": "no"})
+    assert update.zip_version(data) == "9.0.0"  # release zips have one top folder
     update.install(data, tmp_path)
     assert (tmp_path / "app.py").read_text() == "new"
+    assert (tmp_path / "profiles" / "template" / "x.json").read_text() == "t"  # template is updated
+    assert not (tmp_path / "profiles" / "lf" / "characters.json").exists()  # installed profiles are not
     assert (tmp_path / "work" / "identity.json").read_text() == "pairing" and not (tmp_path / "work" / "evil.txt").exists()
     assert (tmp_path / "profiles" / "lf" / "voices" / "Mira.wav").read_text() == "voice"
     assert not (tmp_path.parent / "outside.txt").exists()

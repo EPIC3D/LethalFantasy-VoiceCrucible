@@ -20,6 +20,7 @@ def newkey(path: Path) -> None:
     """Create a key pair; the private key is written to `path` (refuses to overwrite)."""
     if path.exists():
         sys.exit(f"{path} exists – refusing to overwrite a signing key")
+    path.parent.mkdir(parents=True, exist_ok=True)
     phrase = getpass.getpass("New passphrase for the signing key: ")
     if len(phrase) < 12 or phrase != getpass.getpass("Repeat it: "):
         sys.exit("passphrases differ or shorter than 12 characters – no key created")

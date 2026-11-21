@@ -26,8 +26,8 @@ from voicecrucible.installer import layout
 
 _log = log.get("update")
 REPO = "EPIC3D/LethalFantasy-VoiceCrucible"
-# Ed25519 public key of the maintainer (base64). Empty until the first signed release – updates are refused.
-PUBLIC_KEY = ""
+# Ed25519 public key of the maintainer (base64). Only zips signed with the matching private key are installed.
+PUBLIC_KEY = "O2ZJW3tNabOy1DJAsr9oxIJUEzE07tpgk5MwrxN9x98="
 KEEP = {"runtime", "work", "output", "logs", "previous", "profiles", "voicecrucible.toml", "INSTALLED.txt", "uv.exe",
         ".git", ".venv"}  # profiles\ = installed profile packs and your own profiles (only template\ is updated)
 
@@ -59,10 +59,20 @@ def _version_tuple(v: str) -> tuple:
     return int(major), int(minor), int(patch), stage, int(pre_n or 0), -1 if dev is None else int(dev)
 
 
+def zip_prefix(z: zipfile.ZipFile) -> str:
+    """'' when the program files are at the zip's top level, 'VoiceCrucible/' when they are in one folder."""
+    if "voicecrucible/__init__.py" in z.namelist():
+        return ""
+    tops = {n.split("/")[0] for n in z.namelist() if "/" in n}
+    if len(tops) == 1 and f"{next(iter(tops))}/voicecrucible/__init__.py" in z.namelist():
+        return next(iter(tops)) + "/"
+    raise UpdateError("the download is not a Voice Crucible release")
+
+
 def zip_version(data: bytes) -> str:
     """Version written inside the (signed) zip – the tag name of a release is not trusted."""
     with zipfile.ZipFile(io.BytesIO(data)) as z:
-        text = z.read("voicecrucible/__init__.py").decode("utf-8")
+        text = z.read(zip_prefix(z) + "voicecrucible/__init__.py").decode("utf-8")
     m = re.search(r'__version__ = "([^"]+)"', text)
     if not m:
         raise UpdateError("the download has no version number")
@@ -115,10 +125,14 @@ def install(data: bytes, root: Path = layout.ROOT) -> None:
     staging = root / "previous" / "_new.zip"
     staging.write_bytes(data)
     with zipfile.ZipFile(staging) as z:
+        prefix = zip_prefix(z)
         for member in z.infolist():
-            out = (root / member.filename).resolve()
-            template = member.filename.startswith("profiles/template/")  # the only part of profiles\ we ship
-            if root.resolve() not in out.parents or (member.filename.split("/")[0] in KEEP and not template):
+            name = member.filename[len(prefix):] if member.filename.startswith(prefix) else ""
+            if not name:
+                continue
+            out = (root / name).resolve()
+            template = name.startswith("profiles/template/")  # the only part of profiles\ we ship
+            if root.resolve() not in out.parents or (name.split("/")[0] in KEEP and not template):
                 continue  # never write outside the folder or over user data
             if member.is_dir():
                 out.mkdir(parents=True, exist_ok=True)
