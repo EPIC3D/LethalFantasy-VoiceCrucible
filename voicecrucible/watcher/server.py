@@ -56,7 +56,27 @@ def status(state: CoordinatorState) -> dict:
         "workers": workers,
         "problems": state.queue.recent_problems(),
         "pairing_code": None if code is None else {"code": code[0], "seconds_left": round(code[1] - time.time())},
+        "output": _output(state),
     }
+
+
+_output_cache: dict = {"at": 0.0, "value": None}
+
+
+def _output(state: CoordinatorState) -> dict:
+    """Where the finished files go: pack folder, files per character folder, report and logs (cached 10 s)."""
+    if _output_cache["value"] is not None and time.time() - _output_cache["at"] < 10:
+        return _output_cache["value"]
+    pack = state.output_root / "voices" / state.language
+    folders = []
+    if pack.exists():
+        for sub in sorted(p for p in pack.iterdir() if p.is_dir()):
+            folders.append({"folder": sub.name, "path": str(sub),
+                            "files": sum(1 for f in sub.iterdir() if f.suffix in (".ogg", ".wav"))})
+    value = {"pack": str(pack), "language": state.language, "profile": state.profile, "folders": folders,
+             "report": str(state.output_root / "report.tsv"), "logs": str(state.log_dir) if state.log_dir else ""}
+    _output_cache.update(at=time.time(), value=value)
+    return value
 
 
 def make_server(state: CoordinatorState, port: int) -> ThreadingHTTPServer:

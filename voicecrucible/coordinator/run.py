@@ -57,6 +57,8 @@ def build_state(cfg: Config) -> app.CoordinatorState:
         assets=AssetStore(folder / "assets"),
         check_settings=check_settings(cfg),
         takes_dir=folder / "takes",
+        log_dir=cfg.path(cfg.paths.log_dir),
+        profile=cfg.render.profile,
     )
 
 

@@ -43,6 +43,13 @@
 </div>
 
 <div class="panel">
+  <h2>Output</h2>
+  <div id="output" class="sub"></div>
+  <table><thead><tr><th>Folder</th><th>Files</th><th>Path</th></tr></thead>
+  <tbody id="folders"></tbody></table>
+</div>
+
+<div class="panel">
   <h2>Pair a new worker</h2>
   <div id="pair"></div>
   <button onclick="newCode()">New pairing code</button>
@@ -83,6 +90,14 @@ async function refresh() {
         `${w.update_status && w.online ? "<br><span class=\"sub\">" + esc(w.update_status) + "</span>" : ""}</td>` +
         `<td><button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="revoke(this)">Remove</button></td></tr>`;
     }).join("") || `<tr><td colspan="10" class="off">No paired workers yet.</td></tr>`;
+    const o = st.output || {};
+    document.getElementById("output").innerHTML =
+      `Voice pack: <code>${esc(o.pack)}</code> · language <b>${esc(o.language)}</b> · profile <b>${esc(o.profile)}</b><br>` +
+      `Report: <code>${esc(o.report)}</code> · Logs: <code>${esc(o.logs)}</code><br>` +
+      `Copy the <code>voices</code> folder into the game's <code>BepInEx\\plugins\\LethalFantasyTTS\\</code>.`;
+    document.getElementById("folders").innerHTML = (o.folders || []).map(f =>
+      `<tr><td>${esc(f.folder)}</td><td>${f.files}</td><td><code>${esc(f.path)}</code></td></tr>`).join("")
+      || `<tr><td colspan="3" class="off">No files yet.</td></tr>`;
     const p = st.pairing_code;
     document.getElementById("pair").innerHTML = p
       ? `<div class="code">${esc(p.code)}</div><div class="sub">valid for ${dur(p.seconds_left)}</div>` : "";

@@ -39,6 +39,8 @@ class CoordinatorState:
     assets: AssetStore
     check_settings: dict
     takes_dir: Path  # failed takes kept as fallback candidates
+    log_dir: Path | None = None  # shown in the watcher
+    profile: str = ""  # active profile name, shown in the watcher
 
 
 class ApiError(Exception):
