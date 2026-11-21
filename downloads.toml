@@ -1,0 +1,60 @@
+# Everything Voice Crucible downloads, from where, under which license, and how big it is.
+# `crucible setup` shows this list (for the components you pick) and asks before downloading anything.
+# Sizes are measured on Windows 11 and rounded up (GB). Models are downloaded on first use.
+# Everything lands inside the install folder (runtime\...) – see INSTALLED.txt after setup.
+
+[components.base]
+title = "Voice Crucible core (coordinator, worker, watcher)"
+required = true
+extras = []
+license = "MIT (Voice Crucible); Python: PSF; cryptography: Apache-2.0/BSD; numpy: BSD; soundfile: BSD"
+source = "Python from python-build-standalone (via uv); packages from pypi.org"
+download_gb = 0.1
+disk_gb = 0.3
+
+[components.gpu]
+title = "PyTorch 2.11 with CUDA 12.8 (NVIDIA RTX 20-50, GTX 16)"
+required_for = ["checks", "chatterbox", "qwen"]
+extras = ["gpu"]
+license = "BSD-3-Clause (PyTorch); NVIDIA CUDA runtime libraries: NVIDIA license (redistributable)"
+source = "https://download.pytorch.org/whl/cu128"
+download_gb = 3.0
+disk_gb = 4.4
+
+[components.checks]
+title = "Quality checks: Whisper (speech recognition), resemblyzer (voice match), UTMOS (audio quality)"
+extras = ["checks"]
+license = "MIT (Whisper), Apache-2.0 (resemblyzer), MIT (SpeechMOS/UTMOS), ISC (librosa)"
+source = "pypi.org; models: openaipublic.azureedge.net (Whisper small), github.com/tarepan/SpeechMOS v1.2.0"
+download_gb = 1.1
+disk_gb = 1.3
+
+[components.chatterbox]
+title = "Chatterbox TTS engine (default voice packs)"
+extras = ["chatterbox"]
+license = "MIT (code and model). Output audio carries Resemble AI's inaudible Perth watermark."
+source = "pypi.org (chatterbox-tts 0.1.7); model: huggingface.co/ResembleAI/chatterbox"
+download_gb = 3.5
+disk_gb = 5.0
+
+[components.qwen]
+title = "Qwen3-TTS 1.7B engine (acting packs; VoiceDesign model)"
+extras = ["qwen"]
+license = "Apache-2.0 (code and models)"
+source = "pypi.org (qwen-tts 0.1.1); models: huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign (+ -Base only for clone mode, 4.3 GB)"
+download_gb = 4.4
+disk_gb = 4.6
+
+[components.seedvc]
+title = "Seed-VC voice conversion (acting packs: keeps each character's voice fixed) – OPTIONAL"
+extras = []
+license = "GPL-3.0 (code and model weights) – installed into its own folder, run as a separate program"
+source = "https://github.com/Plachtaa/seed-vc (pinned commit below); models: huggingface.co/Plachta/Seed-VC and its dependencies"
+download_gb = 4.0
+disk_gb = 6.0
+commit = "51383efd921027683c89e5348211d93ff12ac2a8"
+zip_url = "https://codeload.github.com/Plachtaa/seed-vc/zip/51383efd921027683c89e5348211d93ff12ac2a8"
+zip_sha256 = "72a27a1d20efec1489041eac2854e3e1c9c23d650ac15900821ad3ab367f0290"
+requirements = "components/seedvc/requirements.txt"
+overrides = "components/seedvc/overrides.txt"
+python = "3.12"

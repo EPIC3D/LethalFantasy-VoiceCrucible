@@ -1,0 +1,4 @@
+{
+  "_comment": "Name respellings sent to the engine instead of the written name (subtitles stay unchanged). One word, no hyphens (hyphens make engines spell or pause). Several spellings = alternatives.",
+  "CharacterA": ["Karakterah"]
+}

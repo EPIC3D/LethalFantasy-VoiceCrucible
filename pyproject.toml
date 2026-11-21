@@ -1,0 +1,87 @@
+[project]
+name = "voicecrucible"
+version = "0.1.0.dev0"
+description = "Renders voice packs for the LethalFantasy TTS plugin on your own NVIDIA GPUs."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.13"
+# The base install (coordinator, watcher, test worker) stays small: no torch, no models.
+dependencies = [
+    "cryptography>=45",
+    "numpy>=1.26",
+    "soundfile>=0.13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+# One PyTorch build for every supported NVIDIA card (RTX 20–50, GTX 16): CUDA 12.8.
+gpu = ["torch==2.11.0", "torchaudio==2.11.0"]
+# Defect filter: Whisper (MIT), resemblyzer (Apache-2.0), librosa (ISC); UTMOS code comes via torch.hub.
+checks = [
+    "voicecrucible[gpu]",
+    "openai-whisper==20250625",
+    "resemblyzer==0.1.4",
+    "webrtcvad-wheels==2.0.14.post1",
+    "librosa==0.11.0",
+]
+# Chatterbox (MIT). Its own torch 2.6 pin cannot run on RTX 50 cards, so it is overridden below
+# (the same versions the RTX 50 worker has been running in production).
+chatterbox = [
+    "voicecrucible[gpu]",
+    "chatterbox-tts==0.1.7",
+    "conformer==0.3.2",
+    "diffusers==0.29.0",
+    "librosa==0.11.0",
+    "resemble-perth==1.0.1",
+    "s3tokenizer==0.3.0",
+    "safetensors==0.5.3",
+    "transformers==4.57.3",
+]
+# Qwen3-TTS (Apache-2.0): VoiceDesign (acting from a text direction) and Base (voice clone).
+qwen = [
+    "voicecrucible[gpu]",
+    "qwen-tts==0.1.1",
+    "accelerate==1.12.0",
+    "transformers==4.57.3",
+]
+
+[project.scripts]
+crucible = "voicecrucible.cli:main"
+
+[tool.uv]
+override-dependencies = [
+    "torch==2.11.0",
+    "torchaudio==2.11.0",
+    "transformers==4.57.3",
+    "safetensors==0.5.3",
+    "diffusers==0.29.0",
+    "librosa==0.11.0",
+    # not installed: webrtcvad needs a C compiler on Windows (webrtcvad-wheels provides the same module),
+    # gradio is only Chatterbox's demo web UI, typing is an obsolete Python 2 backport
+    "webrtcvad ; sys_platform == 'never'",
+    "gradio ; sys_platform == 'never'",
+    "typing ; sys_platform == 'never'",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 130
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["B027"]  # empty optional hooks (load/unload) in base classes are intentional
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

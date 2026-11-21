@@ -1,0 +1,20 @@
+{
+  "_comment": "Expression -> engine settings. chatterbox: [exaggeration 0.25-1.2, cfg_weight 0.2-0.7] (more exaggeration = more expressive, lower cfg = slower and freer). strong = expressions where an introvert adjustment is not applied. intense = expressions acted with the expressive Qwen style. sanitize = direction words replaced before acting (regex, replacement).",
+  "chatterbox": {
+    "Neutral": [0.45, 0.50],
+    "Happy": [0.65, 0.42],
+    "Angry": [0.85, 0.35]
+  },
+  "strong": ["Angry"],
+  "intense": ["Angry"],
+  "qwen": {
+    "style": "Natural, believable voice acting; grounded, not exaggerated; adult voices only. ",
+    "intense_style": "Expressive, emotionally intense voice acting; fully committed performance, adult voice. ",
+    "normal": {"temperature": 0.6, "subtalker_temperature": 0.6},
+    "intense_gen": {"temperature": 0.7, "subtalker_temperature": 0.7}
+  },
+  "sanitize": [
+    ["\\b(squeal\\w*|shriek\\w*|squeak\\w*)", "a raised, surprised voice"],
+    ["\\bgiggl(e|es|ing)\\b", "soft nervous laugh"]
+  ]
+}

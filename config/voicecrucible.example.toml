@@ -1,0 +1,44 @@
+# Voice Crucible settings. Copy to voicecrucible.toml (in the Voice Crucible folder) and change only what
+# you need – every key has a default. Check it with:  crucible.cmd config      Details: docs/CONFIG.md
+
+[paths]
+work_dir = "work"        # queue, pairing, cached voices (keep it private)
+output_dir = "output"    # finished voice pack: output/voices/<language>/<CHARACTER>/<KEY>.ogg
+log_dir = "logs"         # one plain-text log file per command run
+
+[render]
+language = "en"                   # voice pack folder of the plugin: en, hu, ja, zh, es, fr, pt-BR, ru, ...
+engine = "chatterbox"             # chatterbox (default packs) | qwen_vc (acting packs) | qwen | test (beeps)
+characters = []                   # pack folders to render, e.g. ["AKIPO"]; empty = every character
+profile = "lethalfantasy"         # installed profile name (profiles/<name>) or a folder path
+
+[checks]
+enabled = ["words", "similarity", "quality", "pitch"]
+whisper_model = "small"   # speech recognition model of the words check
+min_text_match = 0.75     # share of the words that must be heard (0-1)
+min_similarity = 0.80     # voice match with the reference (0-1)
+min_mos = 2.0             # audio quality estimate (1-5)
+max_f0 = 380.0            # median pitch ceiling in Hz (rejects squeaky, childlike takes)
+max_attempts = 3          # takes per line before it is listed as failed
+
+[director]
+mode = "none"            # none = emotion table only | file = use a directions.json | api = ask an AI
+file = ""                # for mode "file": a directions.json, or a folder of them
+api_base = "http://localhost:11434/v1"   # for mode "api": any OpenAI-compatible API (Ollama, LM Studio, cloud)
+model = ""                               # for mode "api": the model name of that API
+api_key_env = "VOICECRUCIBLE_API_KEY"    # the key is read from this environment variable – never put it here
+
+[coordinator]
+port = 5130              # HTTPS API the workers connect to (allow it in the firewall for the local network)
+discovery_port = 5131    # answers workers looking for this machine on the LAN (DHCP-safe)
+watcher_port = 5132      # watcher page, only reachable on this computer: http://127.0.0.1:5132
+discovery = true
+max_batch = 16           # upper limit of lines per job for any worker
+
+[worker]
+name = ""                # shown in the watcher; empty = computer name
+coordinator = ""         # empty = find it automatically on the LAN; or a hostname or an IP address
+max_batch = 16           # lines rendered together; lowered automatically when the GPU runs out of memory
+allow_update_requests = false  # true = the coordinator's "Update workers" button may make this worker update
+                               # itself from GitHub (it verifies the signature itself; no code comes from the coordinator)
+seedvc_dir = "runtime/components/seed-vc"   # optional Seed-VC install (setup puts it here)

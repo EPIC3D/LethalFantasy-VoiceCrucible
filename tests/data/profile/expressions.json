@@ -1,0 +1,6 @@
+{
+  "_comment": "Game expression tag -> what it means for the acting (read by the acting engines and the AI director). Add one entry per expression the game uses.",
+  "Neutral": {"meaning": "calm, everyday talk"},
+  "Happy": {"meaning": "openly happy, warm"},
+  "Angry": {"meaning": "clearly audible, sharp anger"}
+}

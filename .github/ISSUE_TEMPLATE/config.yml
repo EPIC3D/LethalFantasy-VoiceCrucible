@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation and settings help
+    url: https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/TROUBLESHOOTING.md
+    about: Check the troubleshooting table first.

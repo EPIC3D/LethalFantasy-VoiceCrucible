@@ -1,0 +1,3 @@
+# Not installed: resemblyzer asks for webrtcvad, which needs a C compiler on Windows.
+# webrtcvad-wheels (in requirements.txt) provides the same module as a ready wheel.
+webrtcvad ; sys_platform == "never"

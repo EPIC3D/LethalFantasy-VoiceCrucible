@@ -1,0 +1,11 @@
+{
+  "_comment": "One entry per speaker, named as in the game export (dialogue_events.jsonl 'character'). folder = voice pack folder the plugin uses; prefix = key prefix of their lines (used when the export names no speaker); voices = reference clip per engine (relative to this folder, 10-25 s of clean speech); bible = voice and personality for the acting engines (normal lines); persona = one short sentence (intense lines); chatterbox_adjust = [exaggeration, cfg_weight] added to the emotion table (more extrovert = positive exaggeration).",
+  "CharacterA": {
+    "folder": "CHARACTER_A",
+    "prefix": "CHARACTERA_DIALOGUE_",
+    "voices": {"chatterbox": "voices/chatterbox/CharacterA.wav", "qwen_vc": "voices/acting/CharacterA.wav"},
+    "bible": "CharacterA, an adult woman; describe the voice (range, warmth, pace) and the personality here.",
+    "persona": "CharacterA, one short sentence.",
+    "chatterbox_adjust": [0.0, 0.0]
+  }
+}

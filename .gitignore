@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+dist/
+# local settings and data – never commit
+voicecrucible.toml
+work/
+output/
+logs/
+models/
+*.wav
+*.ogg
+*.key
+*.token
+runtime/
+INSTALLED.txt
+uv.exe
+profiles/*
+!profiles/template/
+!tests/data/profile/voices/**/*.wav

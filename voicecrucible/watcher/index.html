@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Crucible</title>
+<style>
+  :root { --bg:#16131c; --panel:#211c2a; --text:#ece6f5; --muted:#a59cb5; --accent:#c38cff; --ok:#6fd49a; --bad:#ff7a8a; --warn:#ffc65c; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 8px; color:var(--accent); }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
+  .panel { background:var(--panel); border-radius:10px; padding:14px; margin-bottom:14px; overflow-x:auto; }
+  .bar { height:12px; background:#0004; border-radius:6px; overflow:hidden; margin:8px 0; }
+  .bar div { height:100%; background:var(--accent); transition:width .5s; }
+  .stats span { margin-right:16px; white-space:nowrap; }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:5px 8px; border-bottom:1px solid #fff1; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  .on { color:var(--ok); } .off { color:var(--muted); } .bad { color:var(--bad); } .retry { color:var(--warn); }
+  button { background:var(--accent); color:#1a1024; border:0; border-radius:6px; padding:6px 12px; font-weight:600; cursor:pointer; }
+  button.small { background:transparent; color:var(--bad); border:1px solid var(--bad); padding:2px 8px; font-weight:400; }
+  .code { font:600 22px ui-monospace, monospace; letter-spacing:2px; margin:6px 0; }
+</style>
+</head>
+<body>
+<h1>Voice Crucible</h1>
+<div class="sub" id="ident">connecting…</div>
+
+<div class="panel">
+  <h2>Progress</h2>
+  <div class="bar"><div id="bar" style="width:0"></div></div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="panel">
+  <h2>Workers</h2>
+  <table><thead><tr><th>Name</th><th>State</th><th>GPU</th><th>VRAM</th><th>Load</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
+  <tbody id="workers"></tbody></table>
+  <p><button onclick="requestUpdate()">Update workers</button></p>
+  <div class="sub">Asks every online worker that allows it (<code>allow_update_requests = true</code>) to update itself
+    from GitHub; each worker checks the signature itself. Update the workers first and this coordinator last
+    (<code>crucible update</code> on this computer).</div>
+</div>
+
+<div class="panel">
+  <h2>Pair a new worker</h2>
+  <div id="pair"></div>
+  <button onclick="newCode()">New pairing code</button>
+  <div class="sub">On the worker machine run <code>pair.cmd</code> and type the code. It works once and expires after 10 minutes.</div>
+</div>
+
+<div class="panel">
+  <h2>Problems</h2>
+  <table><thead><tr><th>Line</th><th>Character</th><th>State</th><th>Attempts</th><th>Reason</th></tr></thead>
+  <tbody id="problems"></tbody></table>
+</div>
+
+<script>
+const H = {"X-Voice-Crucible": "1", "Content-Type": "application/json"};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dur = s => s == null ? "–" : s < 90 ? s + " s" : s < 5400 ? Math.round(s/60) + " min" : (s/3600).toFixed(1) + " h";
+
+async function refresh() {
+  try {
+    const st = await (await fetch("/api/status")).json();
+    const c = st.counts, total = c.pending + c.leased + c.done + c.failed;
+    document.getElementById("ident").textContent =
+      `Coordinator ${st.coordinator_id} · version ${st.version} · certificate ${st.fingerprint}`;
+    document.getElementById("bar").style.width = total ? (100 * (c.done + c.failed) / total) + "%" : "0";
+    document.getElementById("stats").innerHTML =
+      `<span>Done <b class="on">${c.done}</b></span><span>Rendering <b>${c.leased}</b></span>` +
+      `<span>Waiting <b>${c.pending}</b></span><span>Failed <b class="bad">${c.failed}</b></span>` +
+      `<span>Time left <b>${dur(st.eta_seconds)}</b></span>`;
+    document.getElementById("workers").innerHTML = st.workers.map(w => {
+      const g = (w.gpus || [])[0] || {};
+      const vram = g.memory_total_mb ? `${(g.memory_used_mb/1024).toFixed(1)} / ${(g.memory_total_mb/1024).toFixed(1)} GB` : "–";
+      return `<tr><td>${esc(w.name)}</td><td class="${w.online ? "on" : "off"}">${w.online ? (w.busy_lines ? "rendering" : "idle") : "offline"}</td>` +
+        `<td>${esc(g.name || "–")}</td><td>${vram}</td><td>${g.utilization_pct != null ? g.utilization_pct + " %" : "–"}</td>` +
+        `<td>${w.done}</td><td>${w.failed}</td><td>${w.lines_per_min}</td>` +
+        `<td class="${w.version && w.version !== st.version ? "retry" : ""}">${esc(w.version || "–")}` +
+        `${w.update_status && w.online ? "<br><span class=\"sub\">" + esc(w.update_status) + "</span>" : ""}</td>` +
+        `<td><button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="revoke(this)">Remove</button></td></tr>`;
+    }).join("") || `<tr><td colspan="10" class="off">No paired workers yet.</td></tr>`;
+    const p = st.pairing_code;
+    document.getElementById("pair").innerHTML = p
+      ? `<div class="code">${esc(p.code)}</div><div class="sub">valid for ${dur(p.seconds_left)}</div>` : "";
+    document.getElementById("problems").innerHTML = st.problems.map(x =>
+      `<tr><td>${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
+      `<td class="${x.status === "failed" ? "bad" : "retry"}">${x.status === "failed" ? "failed" : "will retry"}</td>` +
+      `<td>${x.attempts}</td><td>${esc(x.reason)}</td></tr>`).join("") || `<tr><td colspan="5" class="off">None.</td></tr>`;
+  } catch (e) {
+    document.getElementById("ident").textContent = "Coordinator not reachable – is 'crucible coordinator' running?";
+  }
+}
+async function requestUpdate() {
+  if (!confirm("Ask all online workers that allow it to update themselves from GitHub?")) return;
+  const r = await (await fetch("/api/request-update", {method: "POST", headers: H})).json();
+  alert(r.workers.length ? "Update requested: " + r.workers.join(", ")
+                         : "No online worker allows update requests (allow_update_requests = true on the worker).");
+  refresh();
+}
+async function newCode() { await fetch("/api/pairing-code", {method: "POST", headers: H}); refresh(); }
+async function revoke(btn) {
+  const id = btn.dataset.id, name = btn.dataset.name;
+  if (!confirm(`Remove worker "${name}"? It has to pair again to work for this coordinator.`)) return;
+  await fetch("/api/revoke", {method: "POST", headers: H, body: JSON.stringify({worker_id: id})}); refresh();
+}
+refresh(); setInterval(refresh, 3000);
+</script>
+</body>
+</html>

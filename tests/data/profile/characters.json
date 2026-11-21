@@ -1,0 +1,43 @@
+{
+  "_comment": "Invented characters for the tests.",
+  "Mira": {
+    "folder": "MIRA",
+    "prefix": "MIRA_DIALOGUE_",
+    "voices": {
+      "chatterbox": "voices/chatterbox/Mira.wav",
+      "qwen_vc": "voices/acting/Mira.wav"
+    },
+    "bible": "Mira, an adult test character.",
+    "persona": "Mira, a test persona.",
+    "chatterbox_adjust": [
+      0.0,
+      0.0
+    ]
+  },
+  "Rook": {
+    "folder": "ROOK",
+    "prefix": "ROOK_DIALOGUE_",
+    "voices": {
+      "chatterbox": "voices/chatterbox/Rook.wav"
+    },
+    "bible": "Rook, an adult test character.",
+    "persona": "Rook, a test persona.",
+    "chatterbox_adjust": [
+      0.1,
+      -0.03
+    ]
+  },
+  "Vale": {
+    "folder": "VALE",
+    "prefix": "VALE_DIALOGUE_",
+    "voices": {
+      "chatterbox": "voices/chatterbox/Vale.wav"
+    },
+    "bible": "Vale, an adult test character.",
+    "persona": "Vale, a test persona.",
+    "chatterbox_adjust": [
+      -0.08,
+      0.05
+    ]
+  }
+}

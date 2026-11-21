@@ -1,0 +1,7 @@
+{
+  "name": "template",
+  "title": "Template – copy this folder to make your own profile",
+  "version": "1.0.0",
+  "voice_crucible": ">=0.1.0",
+  "description": "Empty example profile. Copy the folder, rename it, fill in characters, voices and notes, then set [render] profile in voicecrucible.toml."
+}
