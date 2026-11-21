@@ -32,6 +32,11 @@ flowchart TD
     Q --> V[Watcher page<br/>progress, workers, problems]
 ```
 
+![The watcher: two PCs rendering together](docs/images/watcher.png)
+
+*Two PCs rendering together. Every line is checked automatically – wrong words, another voice, bad audio or
+a wrong name are caught and rendered again.*
+
 ## Quick start
 
 1. Unzip into a folder on an SSD (e.g. `D:\VoiceCrucible`), run **`setup.cmd`** – it shows what it will
