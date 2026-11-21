@@ -1,39 +1,50 @@
 # Profiles
 
-A **profile** holds everything about the characters you render: who speaks, their reference voices, how they
-act, how names are pronounced, and the brief for an AI director. Voice Crucible ships only an empty
-**template** (`profiles\template\`) – you create your own profile from it. No character data is part of
-this repository.
+A **profile** holds everything about the characters you render: who speaks, their reference voices, how each
+game expression is acted, how names are pronounced, and the brief for an AI director.
 
 ```mermaid
 flowchart LR
-    T[profiles\template\] -->|crucible profile new lethalfantasy| P[profiles\lethalfantasy\]
-    X[Game line export] -->|render --dry-run<br/>adds the speakers| P
-    V[Your reference clips<br/>one per character] --> P
-    P --> R[crucible render]
+    D[profiles\lethalfantasy\<br/>bundled default – ready to use] --> R[crucible render]
+    D -->|profile new my-voices --from lethalfantasy| C[profiles\my-voices\<br/>your editable copy]
+    T[profiles\template\<br/>empty start] -->|profile new my-voices| C
+    S[A profile zip from someone] -->|profile install| C
+    C -->|"[render] profile = my-voices"| R
 ```
 
-## Create your profile (once)
+## The bundled default: `lethalfantasy`
 
-1. `crucible.cmd profile new lethalfantasy`
-   Creates `profiles\lethalfantasy\` from the template (`lethalfantasy` is the default profile name; another
-   name needs `[render] profile = "<name>"` in `voicecrucible.toml`).
-2. `crucible.cmd render --lines "<game>\BepInEx\LethalFantasyTTS" --dry-run`
-   Reads the game's export and **adds every speaker** to `characters.json` with defaults. It prints the
-   file name each character's reference clip needs, e.g. `voices\chatterbox\<Name>.wav`.
-3. Open `profiles\lethalfantasy\characters.json` and check each speaker:
-   - `folder` – the voice pack folder the plugin reads. It is filled in automatically from
-     `plugin_folders.json` (LethalFantasy: `AKIPO`, `RED`, `BLUE`); a speaker not listed there gets its name in
-     capitals – add it to `plugin_folders.json` or change the folder here if the plugin expects another name.
-   - `bible` / `persona` – a short description of voice and personality (used by the acting engines).
-4. Put one **reference clip** per character into `voices\chatterbox\` (and `voices\acting\` for acting packs):
-   10–25 seconds of clean speech of the voice you want, WAV/FLAC/OGG, named as in `characters.json`.
-   Only use voices you have the right to use.
-5. Optional: `pronunciation.json` (how names are spoken), `expressions.json` and `emotions.json` (how each
-   game expression is acted), `director_brief.md` (notes for an AI director). Each file has comments.
+Voice Crucible comes with a ready profile – **the voices and settings of the LethalFantasy TTS demo**:
+Chatterbox reference voices for Akipo, Red and Blue, the tuned emotion table, expression meanings and name
+pronunciation. No acting director (no character descriptions, no acting references). It is the default
+(`[render] profile = "lethalfantasy"`), so rendering works right after setup.
 
-Then render as usual. A speaker added in a later game version is picked up the same way: it is added
-automatically and skipped until it has a reference clip.
+It is **part of the program**: every Voice Crucible update replaces it with the maintainer's current version.
+Don't edit it – make a copy instead.
+
+## Your own profile
+
+- **Copy the default and change it:** `crucible.cmd profile new my-voices --from lethalfantasy`
+- **Start empty:** `crucible.cmd profile new my-voices` (from the template; the speakers are added from the
+  game export when you run `render --dry-run`, voice pack folders come from `plugin_folders.json`)
+- **Install a profile someone shared:** `crucible.cmd profile install <zip>`
+
+Then set `[render] profile = "my-voices"` in `voicecrucible.toml`. Updates never touch your own profiles.
+`crucible.cmd profile list` shows all profiles (`*` = active).
+
+### What to change
+
+1. **Voices** – put one reference clip per character into `voices\chatterbox\` (and `voices\acting\` for
+   acting packs): 10–25 seconds of clean speech, WAV/FLAC/OGG, named as in `characters.json`. Any voice works,
+   also a male one. Only use voices you have the right to use.
+2. `characters.json` – per speaker: `folder` (the plugin's voice pack folder, LethalFantasy: `AKIPO`, `RED`,
+   `BLUE`), `voices`, `chatterbox_adjust`, and for the acting engines `bible` / `persona` (voice and
+   personality).
+3. Optional: `pronunciation.json`, `emotions.json`, `expressions.json`, `director_brief.md` – each file has
+   comments.
+
+A speaker added in a later game version is added to your profile automatically and skipped until it has a
+reference clip.
 
 ## What is in a profile
 
@@ -48,19 +59,13 @@ automatically and skipped until it has a reference clip.
 | `pronunciation.json` | name respellings for the engines (subtitles stay unchanged) |
 | `director_brief.md` | instructions and character notes for an AI director |
 
-## Updates and backups
+## Re-rendering after a change
 
-- **Program updates** (`crucible.cmd update`) never touch `profiles\` – only the template is refreshed.
-  Compare your profile with a new template when you like (new options appear there first).
-- Keep a copy of your profile folder; it is your work.
-- After changing a profile, lines that were already rendered stay as they are. To render them again, delete
-  their files from `output\` (or the whole character folder) and run `render` again.
+Lines that were already rendered stay as they are. To render them again, delete their files from `output\`
+(or the whole character folder) and run `render` again – lines already in the queue are not queued twice.
 
-## Sharing profiles (optional)
+## Sharing a profile
 
-A profile can be shared as a zip that contains the profile folder (with `profile.json`). Someone else
-installs it with `crucible.cmd profile install <zip>` – an existing profile of the same name is first copied
-to `profiles\<name>.backup-<date>\`, and reference clips the pack does not bring stay in place. Only share
-voices and character texts you are allowed to share.
-
-`crucible.cmd profile list` shows the profiles you have (`*` = active).
+Zip the profile folder itself (one folder with `profile.json` inside). Others install it with
+`crucible.cmd profile install <zip>`; an existing profile of the same name is first copied to
+`profiles\<name>.backup-<date>\`. Only share voices and texts you are allowed to share.

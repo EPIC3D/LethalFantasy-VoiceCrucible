@@ -36,15 +36,15 @@ flowchart TD
 
 1. Unzip into a folder on an SSD (e.g. `D:\VoiceCrucible`), run **`setup.cmd`** – it shows what it will
    download and asks first.
-2. Create your **profile** (characters and their reference voices): `crucible.cmd profile new lethalfantasy`,
-   then add one reference clip per character – [docs/PROFILES.md](docs/PROFILES.md) shows the few steps.
+2. Nothing to prepare for the voices: the bundled **`lethalfantasy` profile** has the demo voices of the
+   LethalFantasy TTS plugin. Want your own? [docs/PROFILES.md](docs/PROFILES.md).
 3. Export the game's lines with the plugin (`[Developer] ExportLines = true`, start the game once).
 4. Run `coordinator.cmd`, then once `pair.cmd` (code from the coordinator), then `worker.cmd`.
 5. `crucible.cmd render --lines "<game>\BepInEx\LethalFantasyTTS"` – watch it with `watcher.cmd`.
 6. The pack is in `output\voices\`; `crucible.cmd report` lists lines with problems.
 
 Step by step: [docs/INSTALL.md](docs/INSTALL.md) · more PCs: [docs/WORKERS.md](docs/WORKERS.md) ·
-settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/PROFILES.md) · problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/PROFILES.md) · problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · **FAQ: [docs/FAQ.md](docs/FAQ.md)**
 
 ## System requirements
 

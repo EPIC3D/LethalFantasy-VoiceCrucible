@@ -1,0 +1,36 @@
+{
+  "_comment": "Bundled default profile – do not edit here (program updates replace it); copy it with 'crucible profile new <name> --from lethalfantasy'. folder = the plugin's voice pack folder; voices = reference clip per engine; chatterbox_adjust = [exaggeration, cfg_weight].",
+  "Akipo": {
+    "folder": "AKIPO",
+    "prefix": "AKIPO_DIALOGUE_",
+    "voices": {
+      "chatterbox": "voices/chatterbox/Akipo.wav"
+    },
+    "chatterbox_adjust": [
+      0.0,
+      0.0
+    ]
+  },
+  "RedTwin": {
+    "folder": "RED",
+    "prefix": "REDTWIN_DIALOGUE_",
+    "voices": {
+      "chatterbox": "voices/chatterbox/RedTwin.wav"
+    },
+    "chatterbox_adjust": [
+      0.1,
+      -0.03
+    ]
+  },
+  "BlueTwin": {
+    "folder": "BLUE",
+    "prefix": "BLUETWIN_DIALOGUE_",
+    "voices": {
+      "chatterbox": "voices/chatterbox/BlueTwin.wav"
+    },
+    "chatterbox_adjust": [
+      -0.08,
+      0.05
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "lethalfantasy",
+  "title": "LethalFantasy – default (Chatterbox demo voices, no director)",
+  "version": "1.0.0",
+  "game_version": "beta 1.0.3",
+  "voice_crucible": ">=0.1.0",
+  "description": "Bundled default profile: the voices and settings of the LethalFantasy TTS demo. Updated with Voice Crucible; make a copy (crucible profile new <name> --from lethalfantasy) to change it."
+}

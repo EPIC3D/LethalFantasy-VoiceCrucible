@@ -14,7 +14,7 @@ removed) into `logs\diagnose.txt`. Logs of every command are in `logs\`.
 | Worker: "not paired or pairing revoked" | Pair again (`pair.cmd`). |
 | Worker: "too old for the coordinator" | Update the worker (`crucible.cmd update`). |
 | Worker: "GPU out of memory" | Handled automatically (smaller batches). If it repeats, lower `[worker] max_batch` or close other GPU programs. |
-| `render`: "profile … does not exist yet" | Create it: `crucible.cmd profile new lethalfantasy` ([PROFILES.md](PROFILES.md)), or check `[render] profile`. |
+| `render`: "profile … does not exist" | Check `[render] profile` in `voicecrucible.toml` (the bundled default is `lethalfantasy`), or create the profile ([PROFILES.md](PROFILES.md)). |
 | `render`: "no reference voice for …" | Put a clip for that character into the profile's `voices\` folder, named as in `characters.json`. |
 | `render`: "new character … found" | A new speaker in the game export was added to `characters.json`; check its `folder` and add a reference clip. |
 | Rendered files land in a folder the plugin does not read | Set the character's `folder` in `characters.json` to the plugin's folder name (LethalFantasy: `AKIPO`, `RED`, `BLUE`; see `plugin_folders.json`). |

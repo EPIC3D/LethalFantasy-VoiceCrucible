@@ -1,0 +1,76 @@
+{
+  "_comment": "Game DialogueExpression -> acting meaning for the director. 'confirmed' = checked by the user in-game. Icons: .tools/expressions_img/contact_sheet.png",
+  "Hurt": {
+    "meaning": "physical strain / effort, mostly while growing (growth strain); sometimes pain from being hit by a trap. NOT emotional hurt or rejection",
+    "confirmed": true
+  },
+  "Glowing": {
+    "meaning": "beaming closed-eye smile, blush. Broad: warm, affectionate, gently teasing in everyday talk (e.g. 'But I trust my little helper won't be... dying that often, right?'); after growth/magic: satisfied, sated, content, blissful",
+    "confirmed": true
+  },
+  "NeutralTilt": {
+    "meaning": "head tilt, mostly on questions: curious and flirty at the same time (separate enum value from Neutral; icon probably neutral_alt, unverified)",
+    "confirmed": true
+  },
+  "Smug": {
+    "meaning": "flirty, teasing, playful (Akipo sticks her tongue out and winks; Twins hide a smirk behind a hand), not arrogant",
+    "confirmed": true
+  },
+  "Angry": {
+    "meaning": "clearly audible anger at the player: sharp, firm, raised and forceful, an angry edge in every word; 'held back' only in that she does not scream. NOT quiet, NOT calm menace",
+    "confirmed": true
+  },
+  "Screaming": {
+    "meaning": "angry at the player and NOT holding back: yelling, furious outburst (anger mark on the icon); not a scared shriek",
+    "confirmed": true
+  },
+  "Neutral": {
+    "meaning": "default talking face; no strong emotion – take the mood from the text and scene",
+    "confirmed": true
+  },
+  "OpenSmile": {
+    "meaning": "friendly, upbeat, cheerful explaining or chatting; open smile",
+    "confirmed": true
+  },
+  "Happy": {
+    "meaning": "clearly happy, delighted, excited; praise, triumph, enjoying the moment",
+    "confirmed": true
+  },
+  "Smile": {
+    "meaning": "small, soft, gentle smile; quiet warmth, a little shy",
+    "confirmed": true
+  },
+  "Laugh": {
+    "meaning": "laughing or amused; light-hearted, sometimes laughing at the player's mishap",
+    "confirmed": true
+  },
+  "Shocked": {
+    "meaning": "surprised, amazed or startled; wide-eyed 'whoa' (also awe at her own size)",
+    "confirmed": true
+  },
+  "Sad": {
+    "meaning": "sad, regretful, worried or apologetic; quiet, lower energy",
+    "confirmed": true
+  },
+  "Cry": {
+    "meaning": "on the verge of tears (small tear in the eye corner on the 3D model), vulnerable confession. The PERFORMANCE must audibly change (same voice, different acting): choked-up, wavering/trembling, tight throat, slightly broken phrasing, a shaky breath or sniffle between phrases. Holding the tears back – NOT open sobbing or wailing",
+    "confirmed": true
+  },
+  "Frown": {
+    "meaning": "displeased, annoyed or scolding: audibly irritated, sharp and pointed (not calm, not soft)",
+    "confirmed": true
+  },
+  "Frustrated": {
+    "meaning": "exasperated, puzzled or wry; 'ugh / well...' sighing tone",
+    "confirmed": true
+  },
+  "Embarrased": {
+    "meaning": "shy, flustered, awkward; hesitant, soft nervous laugh",
+    "confirmed": true
+  },
+  "EmbarrasedMax": {
+    "meaning": "extremely flustered, overwhelmed; stammering, panicked, wants to stop",
+    "confirmed": true
+  },
+  "_anger_triggers": "Anger (Frown/Angry/Screaming) mostly comes from: reviving the player (they lose height because they wasted magic on the player), not being fed in time, the player hitting them with a trap (they want to teach the player a lesson). Akipo interactions sometimes have such extras too; the Twins have few yet, more expected later."
+}

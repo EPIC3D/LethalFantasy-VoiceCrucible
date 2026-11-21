@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0b3 – unreleased
+
+- **Bundled default profile `lethalfantasy`:** the voices and settings of the LethalFantasy TTS demo
+  (Chatterbox reference voices, emotion table, expressions, pronunciation; no acting director). Rendering
+  works right after setup. Program updates refresh it; your own profiles are never touched.
+- `crucible profile new <name> --from lethalfantasy` makes an editable copy; without `--from` it starts
+  empty from the template.
+
 ## 0.1.0b2 – 2026-11-21
 
 Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards, against LethalFantasy beta 1.0.3.

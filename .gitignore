@@ -19,4 +19,6 @@ INSTALLED.txt
 uv.exe
 profiles/*
 !profiles/template/
+!profiles/lethalfantasy/
+!profiles/lethalfantasy/voices/**/*.wav
 !tests/data/profile/voices/**/*.wav

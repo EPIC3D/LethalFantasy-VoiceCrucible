@@ -4,7 +4,8 @@ Steps: ask GitHub for the latest release -> show version, notes and size -> ask 
 and its signature -> verify the Ed25519 signature with the public key below (only the maintainer has the
 private key) -> move the current program files to previous\\ -> unpack the new ones.
 Never touched: runtime\\ (installed parts), work\\ (pairing, queue), output\\, logs\\, voicecrucible.toml,
-profiles\\ (installed and own profiles; only profiles\\template\\ is updated). `crucible update --rollback`
+profiles\\ (your own and installed profiles; only the bundled template\\ and lethalfantasy\\ are
+updated). `crucible update --rollback`
 restores previous\\. No background checks exist.
 """
 
@@ -29,7 +30,8 @@ REPO = "EPIC3D/LethalFantasy-VoiceCrucible"
 # Ed25519 public key of the maintainer (base64). Only zips signed with the matching private key are installed.
 PUBLIC_KEY = "O2ZJW3tNabOy1DJAsr9oxIJUEzE07tpgk5MwrxN9x98="
 KEEP = {"runtime", "work", "output", "logs", "previous", "profiles", "voicecrucible.toml", "INSTALLED.txt", "uv.exe",
-        ".git", ".venv"}  # profiles\ = installed profile packs and your own profiles (only template\ is updated)
+        ".git", ".venv"}  # profiles\ = your own and installed profiles – except the bundled ones below
+SHIPPED_PROFILES = ("profiles/template/", "profiles/lethalfantasy/")  # replaced by every program update
 
 
 class UpdateError(RuntimeError):
@@ -147,8 +149,8 @@ def install(data: bytes, root: Path = layout.ROOT) -> None:
             if not name:
                 continue
             out = (root / name).resolve()
-            template = name.startswith("profiles/template/")  # the only part of profiles\ we ship
-            if root.resolve() not in out.parents or (name.split("/")[0] in KEEP and not template):
+            shipped = name.startswith(SHIPPED_PROFILES)  # the bundled profiles are part of the program
+            if root.resolve() not in out.parents or (name.split("/")[0] in KEEP and not shipped):
                 continue  # never write outside the folder or over user data
             if member.is_dir():
                 out.mkdir(parents=True, exist_ok=True)

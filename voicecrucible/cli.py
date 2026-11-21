@@ -63,7 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--yes", action="store_true", help="answer every question with its default")
     cmds["profile"].add_argument("action", choices=["new", "list", "install"])
     cmds["profile"].add_argument("target", nargs="?", default="",
-                                 help="new: profile name (e.g. lethalfantasy); install: a profile pack zip")
+                                 help="new: name of the new profile; install: a profile zip")
+    cmds["profile"].add_argument("--from", dest="source", default="template",
+                                 help="new: copy this profile (e.g. lethalfantasy) instead of the empty template")
     cmds["update"].add_argument("--rollback", action="store_true", help="go back to the version before the last update")
     d = cmds["direct"]
     d.add_argument("--lines", type=Path, required=True, help="folder with the plugin's line export")
@@ -174,7 +176,7 @@ def _cmd_profile(cfg: config_mod.Config, args: argparse.Namespace) -> int:
     """Install or list profiles."""
     from voicecrucible.installer import profiles
     if args.action == "new":
-        return profiles.new_command(args.target)
+        return profiles.new_command(args.target, args.source)
     if args.action == "install":
         return profiles.install_command(Path(args.target) if args.target else None)
     return profiles.list_command(cfg.render.profile)

@@ -15,11 +15,10 @@ Tested on **Windows 11 with NVIDIA GPUs** (RTX 40 and RTX 50 series cards). See 
 
 Uninstall = delete the folder.
 
-## 2. Get the reference voices and the game's lines
+## 2. Voices and the game's lines
 
-- **Profile** (your characters and their reference voices): `crucible.cmd profile new lethalfantasy`, then
-  follow [PROFILES.md](PROFILES.md) – the game's speakers are added automatically, you add one reference clip
-  per character. Without a profile `render` stops with a clear message.
+- **Voices**: the bundled `lethalfantasy` profile (the plugin's demo voices) is used by default – nothing to do.
+  For your own voices see [PROFILES.md](PROFILES.md).
 - **Lines**: in the LethalFantasy TTS plugin set `[Developer] ExportLines = true` in `BepInEx\config\lf-tts.cfg`,
   start the game once, then set it back to `false`. The export is in `<game>\BepInEx\LethalFantasyTTS\`.
 

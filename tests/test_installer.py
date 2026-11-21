@@ -114,6 +114,19 @@ def test_new_profile_from_template(tmp_path):
     assert "CharacterA" not in (target / "characters.json").read_text()  # speakers come from the export
     with pytest.raises(profiles.ProfileError, match="already exists"):
         profiles.new_profile("mygame", tmp_path)
+    with pytest.raises(profiles.ProfileError, match="bundled"):
+        profiles.new_profile("lethalfantasy", tmp_path)
+    copy = profiles.new_profile("mycopy", tmp_path, source="mygame")  # editable copy of another profile
+    assert (copy / "characters.json").read_text() == (target / "characters.json").read_text()
+
+
+def test_bundled_default_profile_is_complete_and_director_free():
+    from voicecrucible.lethalfantasy import profile as profile_mod
+    folder = Path(__file__).parents[1] / "profiles" / "lethalfantasy"
+    p = profile_mod.load(folder)
+    assert {c.folder for c in p.characters.values()} == {"AKIPO", "RED", "BLUE"}
+    assert all(c.voices["chatterbox"].exists() and not c.bible for c in p.characters.values())
+    assert len(p.emotions["chatterbox"]) >= 18 and "qwen_vc" not in str((folder / "characters.json").read_text())
 
 
 def test_profile_pack_install_update_and_backup(tmp_path):

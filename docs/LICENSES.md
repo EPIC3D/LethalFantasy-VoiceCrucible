@@ -19,5 +19,9 @@
 | PyTorch | BSD-3-Clause | – |
 | uv (bundled in the release, unchanged; license texts in `third_party/uv/`) | MIT / Apache-2.0 | – |
 
+- **Bundled default profile (`profiles/lethalfantasy/`):** the reference voices are synthetic – short clips
+  rendered with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) voice blends, no
+  recording of a real person. The character and place names belong to the game's author, LadyAlice; they
+  are used only to match the game's lines.
 - Rendered voice files are not covered by these licenses; voice packs made from the game's lines have
   their own terms (see the LethalFantasy TTS repository).

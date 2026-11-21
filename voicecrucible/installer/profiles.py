@@ -66,38 +66,48 @@ def install(pack: Path, root: Path = layout.ROOT) -> tuple[dict, Path | None]:
     return meta, backup
 
 
-def new_profile(name: str, root: Path = layout.ROOT) -> Path:
-    """Create profiles/<name> as a copy of the template (without its example character)."""
-    if not name.replace("-", "").replace("_", "").isalnum() or name == "template":
-        raise ProfileError(f"invalid profile name {name!r} (letters, digits, - and _)")
+BUNDLED = ("template", "lethalfantasy")  # shipped with Voice Crucible and replaced by program updates
+
+
+def new_profile(name: str, root: Path = layout.ROOT, source: str = "template") -> Path:
+    """Create profiles/<name>: an empty start from the template, or an editable copy of another profile."""
+    if not name.replace("-", "").replace("_", "").isalnum() or name in BUNDLED:
+        raise ProfileError(f"choose another name than {name!r} (letters, digits, - and _; "
+                           f"not {' or '.join(BUNDLED)}, those are bundled)")
     target = profiles_dir(root) / name
     if target.exists():
         raise ProfileError(f"profile '{name}' already exists: {target}")
-    shutil.copytree(profiles_dir(root) / "template", target, ignore=shutil.ignore_patterns(".gitignore"))
+    src = profiles_dir(root) / source
+    if not (src / "characters.json").exists():
+        raise ProfileError(f"there is no profile '{source}' to copy")
+    shutil.copytree(src, target, ignore=shutil.ignore_patterns(".gitignore"))
     meta = json.loads((target / "profile.json").read_text(encoding="utf-8"))
-    meta.update(name=name, title=name, version="1.0.0", description="Created from the template.")
+    meta.update(name=name, title=name, version="1.0.0", description=f"Created from '{source}'.")
     (target / "profile.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-    chars = json.loads((target / "characters.json").read_text(encoding="utf-8"))
-    chars = {k: v for k, v in chars.items() if k.startswith("_")}  # speakers are added from the game export
-    (target / "characters.json").write_text(json.dumps(chars, indent=2) + "\n", encoding="utf-8")
+    if source == "template":  # empty start: speakers are added from the game export
+        chars = json.loads((target / "characters.json").read_text(encoding="utf-8"))
+        chars = {k: v for k, v in chars.items() if k.startswith("_")}
+        (target / "characters.json").write_text(json.dumps(chars, indent=2) + "\n", encoding="utf-8")
     for engine in ("chatterbox", "acting"):
         (target / "voices" / engine).mkdir(parents=True, exist_ok=True)
     return target
 
 
-def new_command(name: str | None) -> int:
-    """`crucible profile new <name>`."""
+def new_command(name: str | None, source: str = "template") -> int:
+    """`crucible profile new <name> [--from <profile>]`."""
     if not name:
-        _log.error("give the profile a name: crucible profile new lethalfantasy")
+        _log.error("give the profile a name: crucible profile new my-voices [--from lethalfantasy]")
         return 1
     try:
-        target = new_profile(name)
+        target = new_profile(name, source=source)
     except (ProfileError, OSError) as e:
         _log.error("%s", e)
         return 1
-    _log.info("profile created: %s", target)
-    _log.info("next: 'crucible render --lines <export> --dry-run' adds the game's speakers to characters.json; "
-              "then put one reference clip per speaker into %s (file names are shown)", target / "voices" / "chatterbox")
+    _log.info("profile created: %s – use it with [render] profile = \"%s\" in voicecrucible.toml", target, name)
+    if source == "template":
+        _log.info("next: 'crucible render --lines <export> --dry-run' adds the game's speakers to characters.json; "
+                  "then put one reference clip per speaker into %s (file names are shown)",
+                  target / "voices" / "chatterbox")
     return 0
 
 

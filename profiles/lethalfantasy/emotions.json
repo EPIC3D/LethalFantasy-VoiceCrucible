@@ -1,0 +1,27 @@
+{
+  "_comment": "Game expression -> engine settings. chatterbox: [exaggeration, cfg_weight] (user-tested 2026-11-19). intense = expressions acted with the expressive Qwen style; strong = the introvert adjustment is not applied (Blue still yells when she yells).",
+  "chatterbox": {
+    "Neutral": [0.45, 0.50], "NeutralTilt": [0.50, 0.48], "Smile": [0.50, 0.48], "OpenSmile": [0.55, 0.45],
+    "Happy": [0.65, 0.42], "Glowing": [0.60, 0.40], "Laugh": [0.75, 0.38], "Smug": [0.60, 0.42],
+    "Shocked": [0.70, 0.42], "Sad": [0.50, 0.40], "Cry": [0.60, 0.35], "Hurt": [0.65, 0.45],
+    "Frustrated": [0.60, 0.45], "Frown": [0.65, 0.42], "Angry": [0.85, 0.35], "Screaming": [1.00, 0.30],
+    "Embarrased": [0.55, 0.38], "EmbarrasedMax": [0.70, 0.32]
+  },
+  "strong": ["Angry", "Screaming", "Shocked", "EmbarrasedMax", "Hurt"],
+  "intense": ["Angry", "Screaming", "Frown", "Hurt", "Shocked", "EmbarrasedMax"],
+  "qwen": {
+    "style": "Natural, believable voice acting for a stylized fantasy game; grounded and warm, not squeaky, not whiny, not exaggerated, no anime-style squealing; adult voices only. ",
+    "intense_style": "Expressive, emotionally intense voice acting for a fantasy game; fully committed performance, adult woman (about 20), never childlike or squeaky. ",
+    "normal": {"temperature": 0.6, "subtalker_temperature": 0.6},
+    "intense_gen": {"temperature": 0.7, "subtalker_temperature": 0.7}
+  },
+  "sanitize": [
+    ["\\b(squeal\\w*|shriek\\w*|squeak\\w*|yelp\\w*)", "a raised, surprised voice"],
+    ["\\bhigh[- ]pitched\\b", "raised"],
+    ["\\b(tiny|small|little),? (voice|squeak|sound)\\b", "soft, quiet voice"],
+    ["\\b(childlike|childish|girlish|like a child|like a little girl)\\b", "sincere"],
+    ["\\bwhimper\\w*", "quiet, hurt tone"],
+    ["\\bwhin(e|ing|y)\\b", "pleading"],
+    ["\\bgiggl(e|es|ing)\\b", "soft nervous laugh"]
+  ]
+}

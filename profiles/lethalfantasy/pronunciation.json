@@ -1,0 +1,7 @@
+{
+  "_comment": "Name respellings sent to the TTS engine instead of the written name (subtitles stay unchanged). One word, no hyphens/spaces: hyphens made engines spell it out or pause. Problems heard: 'Aki---po' (long pause), 'So-la-na' (drunk spelling), 'Selena' swallowed.",
+  "Akipo": ["Akeepo", "Ahkeepoh"],
+  "Solana": ["Solahna", "Sohlahna"],
+  "Lana": ["Lahna"],
+  "Selena": ["Seleena", "Suhleena"]
+}

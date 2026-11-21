@@ -74,8 +74,8 @@ def load(folder: Path) -> Profile:
     """Load a profile folder (see profiles/template for the format)."""
     if not (folder / "characters.json").exists():
         raise ProfileMissing(
-            f"profile '{folder.name}' does not exist yet ({folder}). Create it from the template with "
-            f"'crucible profile new {folder.name}' (see docs/PROFILES.md), or install a profile pack.")
+            f"profile '{folder.name}' does not exist ({folder}). The bundled default is 'lethalfantasy'; create "
+            f"your own with 'crucible profile new {folder.name}' (see docs/PROFILES.md) or check [render] profile.")
     chars = {}
     for name, c in _json(folder / "characters.json").items():
         chars[name] = Character(name=name, folder=c["folder"], prefix=c["prefix"],

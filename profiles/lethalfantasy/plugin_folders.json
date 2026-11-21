@@ -1,0 +1,6 @@
+{
+  "_comment": "Speaker ID in the game export -> voice pack folder the LethalFantasy TTS plugin reads. Used when a speaker is added to characters.json automatically. Technical IDs only (the plugin's folder layout).",
+  "Akipo": "AKIPO",
+  "RedTwin": "RED",
+  "BlueTwin": "BLUE"
+}
