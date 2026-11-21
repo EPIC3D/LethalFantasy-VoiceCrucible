@@ -97,3 +97,17 @@ use it at your own risk.
 Code: MIT (see [LICENSE](LICENSE)) – except one small bridge file to Seed-VC, which is GPL-3.0.
 Third-party engines and model weights are downloaded from their own sources under their own licenses –
 see [docs/LICENSES.md](docs/LICENSES.md).
+
+## Related
+
+- [LethalFantasy TTS](https://github.com/EPIC3D/LethalFantasy-TTS) – the BepInEx plugin that plays the voice
+  packs in the game.
+
+## Support
+
+If you enjoy the game, please support its author, LadyAlice, first:
+<https://www.patreon.com/cw/LadyAliceR18>.
+
+If you'd also like to support this tool:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/E6Z42AUOBQ)

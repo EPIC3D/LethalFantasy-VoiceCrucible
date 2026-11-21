@@ -92,7 +92,10 @@ def main(argv: list[str] | None = None) -> int:
     layout.apply()  # caches and models stay inside the install folder, also without a launcher
     args = build_parser().parse_args(argv)
     try:
-        cfg = config_mod.load(_find_config(args.config))
+        config_file = _find_config(args.config)
+        cfg = config_mod.load(config_file)
+        if config_file is None:  # no settings file: folders are relative to the install folder, not the current one
+            cfg.base_dir = layout.ROOT
     except (OSError, config_mod.ConfigError) as e:
         print(f"Config error: {e}", file=sys.stderr)
         return 2
