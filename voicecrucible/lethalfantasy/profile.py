@@ -47,8 +47,10 @@ def add_new_characters(folder: Path, names: set[str]) -> list[str]:
         return []
     data = json.loads(path.read_text(encoding="utf-8"))
     added = sorted(n for n in names if n not in data and not n.startswith("_"))
+    folders_file = folder / "plugin_folders.json"
+    plugin_folders = _json(folders_file) if folders_file.exists() else {}
     for name in added:
-        data[name] = {"folder": name.upper(), "prefix": f"{name.upper()}_DIALOGUE_",
+        data[name] = {"folder": plugin_folders.get(name, name.upper()), "prefix": f"{name.upper()}_DIALOGUE_",
                       "voices": {"chatterbox": f"voices/chatterbox/{name}.wav", "qwen_vc": f"voices/acting/{name}.wav"},
                       "bible": f"{name}, a character of LethalFantasy.", "persona": f"{name}.",
                       "chatterbox_adjust": [0.0, 0.0], "_added_automatically": "check folder, prefix, voices and bible"}

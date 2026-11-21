@@ -53,7 +53,8 @@ def test_new_character_is_added_and_skipped_until_it_has_a_voice(tmp_path):
         f.write("\n" + json.dumps({"asset": "N", "key": "MIRA_DIALOGUE_X_1", "character": "Nova", "type": "Normal"}))
     assert profile_mod.add_new_characters(prof, lines.speakers(export)) == ["Nova"]
     p = profile_mod.load(prof)
-    assert p.characters["Nova"].folder == "NOVA"
+    assert p.characters["Nova"].folder == "NV"  # from plugin_folders.json (default would be "NOVA")
+    assert p.characters["Nova"].voices["chatterbox"].name == "Nova.wav"
     result = build.build(p, lines.read_export(export, p), "chatterbox", {}, lambda x: "id")
     assert result.missing_voices == {"Mira", "Rook", "Nova"} and not result.lines  # no voices in the copy
 

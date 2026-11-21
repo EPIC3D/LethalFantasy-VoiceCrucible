@@ -17,7 +17,7 @@ removed) into `logs\diagnose.txt`. Logs of every command are in `logs\`.
 | `render`: "profile … does not exist yet" | Create it: `crucible.cmd profile new lethalfantasy` ([PROFILES.md](PROFILES.md)), or check `[render] profile`. |
 | `render`: "no reference voice for …" | Put a clip for that character into the profile's `voices\` folder, named as in `characters.json`. |
 | `render`: "new character … found" | A new speaker in the game export was added to `characters.json`; check its `folder` and add a reference clip. |
-| Rendered files land in a folder the plugin does not read | Set each character's `folder` in `characters.json` to the plugin's folder name (LethalFantasy: `AKIPO`, `RED`, `BLUE`). |
+| Rendered files land in a folder the plugin does not read | Set the character's `folder` in `characters.json` to the plugin's folder name (LethalFantasy: `AKIPO`, `RED`, `BLUE`; see `plugin_folders.json`). |
 | `qwen_vc`: "Seed-VC … not found" | Install the Seed-VC component (`setup.cmd`, answer yes) or use another engine. |
 | Many lines fail a check | See `output\report.tsv` for the reasons. Strong emotions sometimes fail the voice match – retries usually fix it. |
 | Watcher page shows 404 | The watcher is http://127.0.0.1:5132 on the coordinator computer (`watcher.cmd`), not port 5130 and not on a worker. |

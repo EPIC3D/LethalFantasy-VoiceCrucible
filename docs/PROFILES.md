@@ -22,9 +22,9 @@ flowchart LR
    Reads the game's export and **adds every speaker** to `characters.json` with defaults. It prints the
    file name each character's reference clip needs, e.g. `voices\chatterbox\<Name>.wav`.
 3. Open `profiles\lethalfantasy\characters.json` and check each speaker:
-   - `folder` – the voice pack folder **the plugin expects**. For LethalFantasy these are `AKIPO`, `RED`
-     and `BLUE`; the automatic default is the game's speaker name in capitals, so change the two Twins'
-     folders to `RED` and `BLUE`.
+   - `folder` – the voice pack folder the plugin reads. It is filled in automatically from
+     `plugin_folders.json` (LethalFantasy: `AKIPO`, `RED`, `BLUE`); a speaker not listed there gets its name in
+     capitals – add it to `plugin_folders.json` or change the folder here if the plugin expects another name.
    - `bible` / `persona` – a short description of voice and personality (used by the acting engines).
 4. Put one **reference clip** per character into `voices\chatterbox\` (and `voices\acting\` for acting packs):
    10–25 seconds of clean speech of the voice you want, WAV/FLAC/OGG, named as in `characters.json`.
@@ -41,6 +41,7 @@ automatically and skipped until it has a reference clip.
 |---|---|
 | `profile.json` | name, title, version |
 | `characters.json` | speakers: voice pack folder, key prefix, reference clip per engine, acting description, Chatterbox adjustment |
+| `plugin_folders.json` | game speaker ID → the plugin's voice pack folder (used when speakers are added automatically) |
 | `voices\` | reference clips |
 | `emotions.json` | game expression → engine settings (Chatterbox sliders, Qwen styles), words replaced in directions |
 | `expressions.json` | what each game expression means for the acting |
