@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0b5 – 2026-11-21
+
+Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards (incl. a worker updating itself from b1 to b4
+via the watcher), against LethalFantasy beta 1.0.3.
+
+- **Fix: running `setup.cmd` again could remove installed components** (PyTorch, Chatterbox, ...) if it did
+  not run to the end. Its first step no longer removes anything.
+- After an update, packages that the new version needs for your installed components are added automatically.
+- A worker with a missing component gives its job back without using up the lines' attempts, stops and says
+  "run setup.cmd".
+- `crucible.cmd render --retry-failed` queues lines that failed for good again.
+
 ## 0.1.0b4 – 2026-11-21
 
 (0.1.0b3 was tagged but never released; its changes are part of this version.)
