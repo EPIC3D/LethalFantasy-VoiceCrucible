@@ -20,6 +20,18 @@ _PAGE = Path(__file__).with_name("index.html")
 ACTION_HEADER = "X-Voice-Crucible"
 
 
+def _compare(version: str) -> str:
+    """'older' / 'newer' / 'same' compared with this coordinator ('' when unknown)."""
+    from voicecrucible.installer.update import UpdateError, _version_tuple
+    if not version:
+        return ""
+    try:
+        mine, theirs = _version_tuple(__version__), _version_tuple(version)
+    except UpdateError:
+        return ""
+    return "same" if theirs == mine else "older" if theirs < mine else "newer"
+
+
 def status(state: CoordinatorState) -> dict:
     """Everything the watcher page shows, as one JSON object."""
     counts = state.queue.counts()
@@ -30,6 +42,8 @@ def status(state: CoordinatorState) -> dict:
             workers.append({"worker_id": wid, "name": info["name"], "online": False, "gpus": [], "done": 0,
                             "failed": 0, "busy_lines": 0, "lines_per_min": 0, "address": "", "version": "",
                             "accepts_updates": False, "update_status": ""})
+    for w in workers:
+        w["version_state"] = _compare(w.get("version", ""))
     speed = sum(w["lines_per_min"] for w in workers if w["online"])
     remaining = counts["pending"] + counts["leased"]
     code = state.pairing.current_code()

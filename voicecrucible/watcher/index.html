@@ -77,7 +77,9 @@ async function refresh() {
       return `<tr><td>${esc(w.name)}</td><td class="${w.online ? "on" : "off"}">${w.online ? (w.busy_lines ? "rendering" : "idle") : "offline"}</td>` +
         `<td>${esc(g.name || "–")}</td><td>${vram}</td><td>${g.utilization_pct != null ? g.utilization_pct + " %" : "–"}</td>` +
         `<td>${w.done}</td><td>${w.failed}</td><td>${w.lines_per_min}</td>` +
-        `<td class="${w.version && w.version !== st.version ? "retry" : ""}">${esc(w.version || "–")}` +
+        `<td class="${w.version_state === "older" ? "retry" : ""}">${esc(w.version || "–")}` +
+        `${w.version_state === "older" ? "<br><span class=\"sub\">older – update this worker</span>" : ""}` +
+        `${w.version_state === "newer" ? "<br><span class=\"sub\">newer – update the coordinator</span>" : ""}` +
         `${w.update_status && w.online ? "<br><span class=\"sub\">" + esc(w.update_status) + "</span>" : ""}</td>` +
         `<td><button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="revoke(this)">Remove</button></td></tr>`;
     }).join("") || `<tr><td colspan="10" class="off">No paired workers yet.</td></tr>`;
