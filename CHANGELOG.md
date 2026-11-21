@@ -1,7 +1,17 @@
 # Changelog
 
-## 0.1.0b2 – unreleased
+## 0.1.0b2 – 2026-11-21
 
+Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards, against LethalFantasy beta 1.0.3.
+
+- **Profiles: make your own from the template** – `crucible profile new lethalfantasy`, then
+  `render --dry-run` adds the game's speakers (voice pack folders from `plugin_folders.json`: AKIPO, RED,
+  BLUE) and tells you where each reference clip goes. No profile pack download is needed
+  (see docs/PROFILES.md).
+- Without a `voicecrucible.toml`, the `work`, `output` and `logs` folders are always created in the Voice
+  Crucible folder (0.1.0b1 created them in the folder the command was started from).
+- README: how-it-works diagram, link to the LethalFantasy TTS plugin, support section; the Memory Orb
+  audiobook is not part of Voice Crucible (yet).
 - Update check: GitHub tags (`v0.1.0-beta.2`) are compared with the program version (`0.1.0b2`) correctly.
   In 0.1.0b1 `crucible update` offers the same version again and then refuses it (harmless).
 - Workers asked to update while already on the latest version report "up to date" instead of an error.
