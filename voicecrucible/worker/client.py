@@ -145,7 +145,12 @@ class WorkerClient:
         self._update_status = "updating"
         _log.info("the coordinator asked for an update – checking GitHub")
         try:
-            version = update.download_and_install(update.latest())
+            rel = update.latest()
+            if not update.is_newer(rel["version"]):
+                self._update_status = f"up to date ({__version__})"
+                _log.info("already the latest version (%s)", __version__)
+                return False
+            version = update.download_and_install(rel)
         except (update.UpdateError, OSError, ValueError, KeyError) as e:
             self._update_status = f"failed: {e}"
             _log.error("self-update failed, this version keeps running: %s", e)

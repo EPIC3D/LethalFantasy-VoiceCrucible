@@ -67,6 +67,12 @@ def test_built_in_public_key_is_valid():
     Ed25519PublicKey.from_public_bytes(base64.b64decode(update.PUBLIC_KEY))
 
 
+def test_tag_names_become_program_versions():
+    assert update.tag_to_version("v0.1.0-beta.1") == "0.1.0b1"
+    assert update.tag_to_version("v0.2.0-rc.2") == "0.2.0rc2" and update.tag_to_version("v1.0.0") == "1.0.0"
+    assert not update.is_newer("0.1.0b1", "0.1.0b1") and update.is_newer("0.1.0b2", "0.1.0b1")
+
+
 def test_downgrade_is_refused():
     newer, _, _ = _signed_zip({"voicecrucible/__init__.py": '__version__ = "0.2.0"\n'})
     older, _, _ = _signed_zip({"voicecrucible/__init__.py": '__version__ = "0.1.0b1"\n'})

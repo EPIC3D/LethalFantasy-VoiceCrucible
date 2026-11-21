@@ -59,6 +59,22 @@ def _version_tuple(v: str) -> tuple:
     return int(major), int(minor), int(patch), stage, int(pre_n or 0), -1 if dev is None else int(dev)
 
 
+def tag_to_version(tag: str) -> str:
+    """GitHub tag -> program version: 'v0.1.0-beta.2' -> '0.1.0b2', 'v0.2.0' -> '0.2.0'."""
+    v = tag.lstrip("v")
+    for word, short in (("alpha", "a"), ("beta", "b"), ("rc", "rc")):
+        v = re.sub(rf"-{word}\.?(\d+)", rf"{short}\1", v)
+    return v
+
+
+def is_newer(version: str, current: str = __version__) -> bool:
+    """True when `version` is newer than `current` (unknown formats count as newer, the zip check decides)."""
+    try:
+        return _version_tuple(version) > _version_tuple(current)
+    except UpdateError:
+        return True
+
+
 def zip_prefix(z: zipfile.ZipFile) -> str:
     """'' when the program files are at the zip's top level, 'VoiceCrucible/' when they are in one folder."""
     if "voicecrucible/__init__.py" in z.namelist():
@@ -105,7 +121,7 @@ def latest() -> dict:
     if not zips or zips[0] + ".sig" not in assets:
         raise UpdateError("the latest release has no signed program zip")
     z = assets[zips[0]]
-    return {"version": rel["tag_name"].lstrip("v"), "notes": rel.get("body", ""), "zip": z["browser_download_url"],
+    return {"version": tag_to_version(rel["tag_name"]), "notes": rel.get("body", ""), "zip": z["browser_download_url"],
             "sig": assets[zips[0] + ".sig"]["browser_download_url"], "size": z["size"]}
 
 
@@ -190,7 +206,7 @@ def run(args: argparse.Namespace, watcher_port: int = 5132) -> int:
             return 0
         rel = latest()
         print(f"Installed: {__version__}   Latest: {rel['version']}   Download: {rel['size'] / 1024 ** 2:.1f} MB")
-        if rel["version"] == __version__:
+        if not is_newer(rel["version"]):
             print("You already have the latest version.")
             return 0
         print("\nChanges:\n" + rel["notes"][:3000])

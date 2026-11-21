@@ -97,7 +97,10 @@ def test_worker_self_update_restarts_or_keeps_running(setup, monkeypatch):
     cfg, state, _ = setup
     client.pair(cfg, state.pairing.new_code(), f"127.0.0.1:{cfg.coordinator.port}")
     worker = client.WorkerClient(cfg, Runner("cpu"))
-    monkeypatch.setattr(update, "latest", lambda: {})
+    from voicecrucible import __version__
+    monkeypatch.setattr(update, "latest", lambda: {"version": __version__})
+    assert not worker._self_update() and worker._update_status.startswith("up to date")  # nothing newer
+    monkeypatch.setattr(update, "latest", lambda: {"version": "9.9.9"})
     monkeypatch.setattr(update, "download_and_install", lambda rel: (_ for _ in ()).throw(update.UpdateError("bad sig")))
     assert not worker._self_update() and worker._update_status == "failed: bad sig" and worker.exit_code == 0
     monkeypatch.setattr(update, "download_and_install", lambda rel: "9.9.9")
