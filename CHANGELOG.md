@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0b6 – unreleased
+
+- **Watcher:** Pause/Resume rendering; per worker Stop (standby), Resume and Shutdown – each asks first and is only
+  offered to workers that support it; "Unpair" moved to the pairing panel; current batch per worker (engine,
+  lines done, current line); Output panel (pack folder, files per character, report, logs); says whether a
+  worker is older or newer than the coordinator.
+- **Memory Orb audiobook (story mode):** `crucible story --lines <export>` renders the pages (narrator, the
+  Twins' coloured lines in their own voices), `--join` builds `voices/<language>/STORY/<page>.ogg`. The default
+  profile has a narrator voice.
+- Fix: writing long OGG files crashed the program (libsndfile) – written in blocks now.
+- Fix: a worker restarted after "Shutdown" works again right away.
+- Security: Pillow 13 (all critical Dependabot warnings), diffusers 0.38; Seed-VC installs fewer packages
+  (no gradio, fastapi, starlette, modelscope, ...) and uses transformers 4.57.3. Remaining warnings are
+  explained in docs/SECURITY.md.
+- Window titles for the launchers ("Voice Crucible - worker", ...); `.cmd` files always with Windows line ends.
+
 ## 0.1.0b5 – 2026-11-21
 
 Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards (incl. a worker updating itself from b1 to b4

@@ -12,7 +12,7 @@ resolution-markers = [
 
 [manifest]
 overrides = [
-    { name = "diffusers", specifier = "==0.29.0" },
+    { name = "diffusers", specifier = "==0.38.0" },
     { name = "gradio", marker = "sys_platform == 'never'" },
     { name = "librosa", specifier = "==0.11.0" },
     { name = "pillow", specifier = ">=13.0.0" },
@@ -449,10 +449,11 @@ wheels = [
 
 [[package]]
 name = "diffusers"
-version = "0.29.0"
+version = "0.38.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
+    { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "importlib-metadata" },
     { name = "numpy" },
@@ -461,9 +462,9 @@ dependencies = [
     { name = "requests" },
     { name = "safetensors" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3d/9a/61961403cfc977e586618fb43631b32c6eb432e7dc5351f0f333ee8b2ca8/diffusers-0.29.0.tar.gz", hash = "sha256:0212030a8fabe7a07d1c8e925ccdf7a529a98b0425fa078900a679b2451a8ac2", size = 1733591, upload-time = "2024-06-12T20:13:41.929Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/ed/255d3dfd4a2271dffc8f1895f9d2720b3bf1beaecf02148bb5604439e594/diffusers-0.38.0.tar.gz", hash = "sha256:1e094ec5c16f18c42fb89d37f07a94cf9aab3ebbe527ab059c609597b8857626", size = 4328401, upload-time = "2026-05-01T05:42:15.276Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/68/a84d929518c9fbd65febcedd7810203bcac393f9cddd0603ec58df7f93f7/diffusers-0.29.0-py3-none-any.whl", hash = "sha256:4c194d2379644a0f7ef9b4ff12c8cf5de4c6324e811265754f08e2f839b8cedb", size = 2213650, upload-time = "2024-06-12T20:13:37.959Z" },
+    { url = "https://files.pythonhosted.org/packages/42/c0/3237566ea6e3a542f3c0669a253d62fe75f27b84b3d7bd4fb3b5ee89d73c/diffusers-0.38.0-py3-none-any.whl", hash = "sha256:18e53f9e539096320470f62c6360a6fd5727ff28cffda566265316e13fcdb612", size = 5245919, upload-time = "2026-05-01T05:42:12.779Z" },
 ]
 
 [[package]]
@@ -2256,7 +2257,7 @@ requires-dist = [
     { name = "chatterbox-tts", marker = "extra == 'chatterbox'", specifier = "==0.1.7" },
     { name = "conformer", marker = "extra == 'chatterbox'", specifier = "==0.3.2" },
     { name = "cryptography", specifier = ">=45" },
-    { name = "diffusers", marker = "extra == 'chatterbox'", specifier = "==0.29.0" },
+    { name = "diffusers", marker = "extra == 'chatterbox'", specifier = "==0.38.0" },
     { name = "librosa", marker = "extra == 'chatterbox'", specifier = "==0.11.0" },
     { name = "librosa", marker = "extra == 'checks'", specifier = "==0.11.0" },
     { name = "numpy", specifier = ">=1.26" },

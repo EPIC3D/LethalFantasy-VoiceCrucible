@@ -30,7 +30,7 @@ chatterbox = [
     "voicecrucible[gpu]",
     "chatterbox-tts==0.1.7",
     "conformer==0.3.2",
-    "diffusers==0.29.0",
+    "diffusers==0.38.0",
     "librosa==0.11.0",
     "resemble-perth==1.0.1",
     "s3tokenizer==0.3.0",
@@ -54,7 +54,7 @@ override-dependencies = [
     "torchaudio==2.11.0",
     "transformers==4.57.3",
     "safetensors==0.5.3",
-    "diffusers==0.29.0",
+    "diffusers==0.38.0",
     "librosa==0.11.0",
     # security: Pillow < 13.0.0 has critical image-decoding bugs (Dependabot); it only comes in as a dependency
     "pillow>=13.0.0",

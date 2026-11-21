@@ -43,6 +43,22 @@ The updater's code is MIT and public on purpose: its safety comes from the signa
   API); the command names the destination and asks first. API keys are read from an environment variable,
   never written to files or logs, never sent to workers.
 
+## Known dependency warnings (GitHub Dependabot)
+
+Every dependency is pinned and checked with `pip-audit` before a release. Updated in 0.1.0b6: Pillow 13
+(all critical warnings), diffusers 0.38, and Seed-VC no longer installs packages it does not use (gradio,
+fastapi, starlette, uvicorn, modelscope, funasr, hydra, tensorboard). What remains cannot be updated yet
+because another component requires the old version:
+
+| Package | Why it stays | Why it does not affect Voice Crucible |
+|---|---|---|
+| transformers 4.57.3 | Qwen3-TTS requires exactly this version | The issues are in model conversion scripts, the `Trainer`, and loading untrusted checkpoints or remote model code. Voice Crucible only loads the fixed official models listed in [DOWNLOADS.md](DOWNLOADS.md), does not train and never enables remote code. |
+| accelerate 1.12.0 | no fixed version exists yet | Path traversal when loading an untrusted checkpoint; same as above. |
+| setuptools 81 | PyTorch 2.11 requires < 82 | Only used while installing packages; Voice Crucible installs only the pinned packages from `uv.lock`. |
+| protobuf 3.19.6 (Seed-VC only) | Seed-VC's audio codec library requires < 3.20 | Affects parsing untrusted protobuf / JSON data; Seed-VC only reads its own model files. |
+
+These will be updated as soon as the components that pin them allow it.
+
 ## Reporting a vulnerability
 
 Please open a GitHub issue without exploit details and ask for a private contact, or use GitHub's private

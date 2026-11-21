@@ -39,7 +39,7 @@ class SeedVC:
         if not (folder / "seed_vc_wrapper.py").exists() or not _python(folder).exists():
             raise SeedVCNotInstalled(f"Seed-VC (optional component) not found in '{folder}' – "
                                      "install it with 'crucible setup' or choose an engine without voice conversion")
-        self._tmp = tempfile.TemporaryDirectory(prefix="vc_")
+        self._tmp = tempfile.TemporaryDirectory(prefix="vc_", ignore_cleanup_errors=True)
         self._log = open(Path(self._tmp.name) / "seedvc.log", "w", encoding="utf-8")
         self._proc = subprocess.Popen([str(_python(folder)), "-u", str(BRIDGE)], cwd=folder, text=True,
                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log)
@@ -54,7 +54,8 @@ class SeedVC:
         src = Path(self._tmp.name) / f"src_{self._n}.wav"
         out = Path(self._tmp.name) / f"out_{self._n}.wav"
         src.write_bytes(audio.encode(samples, sr, "wav"))
-        self._proc.stdin.write(json.dumps({"src": str(src), "ref": str(ref), "out": str(out), "steps": steps}) + "\n")
+        msg = {"src": str(src.resolve()), "ref": str(Path(ref).resolve()), "out": str(out.resolve()), "steps": steps}
+        self._proc.stdin.write(json.dumps(msg) + "\n")  # absolute paths: the bridge runs in the Seed-VC folder
         self._proc.stdin.flush()
         answer = self._read()
         if not answer.get("ok"):
