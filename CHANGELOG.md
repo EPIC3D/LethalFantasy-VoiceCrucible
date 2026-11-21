@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.0b3 – 2026-11-21
+## 0.1.0b4 – 2026-11-21
+
+(0.1.0b3 was tagged but never released; its changes are part of this version.)
 
 Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards, against LethalFantasy beta 1.0.3.
 
@@ -13,6 +15,8 @@ Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards, against LethalF
   new lines are rendered (`--all` renders everything again).
 - **Lines that fail every check still get a file:** the best take (highest audio quality) is exported and
   marked in `report.tsv` as "failed – best take used", like the original voice pack pipeline.
+- **Updates keep your changes to the bundled profiles:** if `profiles\lethalfantasy\` or `template\` was
+  edited, it is saved to `profiles\<name>.backup-<date>\` before the update replaces it.
 - FAQ: where the lines come from (your game's export) and what Weblate is used for.
 
 ## 0.1.0b2 – 2026-11-21

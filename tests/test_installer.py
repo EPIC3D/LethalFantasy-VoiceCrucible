@@ -104,6 +104,22 @@ def test_install_keeps_user_data_and_rollback_restores(tmp_path):
     assert (tmp_path / "app.py").read_text() == "old" and not (tmp_path / "previous").exists()
 
 
+def test_edited_bundled_profile_is_backed_up_before_update(tmp_path):
+    lf = tmp_path / "profiles" / "lethalfantasy"
+    lf.mkdir(parents=True)
+    (lf / "emotions.json").write_text("same")
+    release = {"VoiceCrucible/voicecrucible/__init__.py": '__version__ = "9.0.0"\n',
+               "VoiceCrucible/profiles/lethalfantasy/emotions.json": "same"}
+    data, _, _ = _signed_zip(release)
+    update.install(data, tmp_path)  # unchanged: no backup
+    assert not list((tmp_path / "profiles").glob("lethalfantasy.backup-*"))
+    (lf / "emotions.json").write_text("my tuning")
+    update.install(data, tmp_path)
+    backups = list((tmp_path / "profiles").glob("lethalfantasy.backup-*"))
+    assert len(backups) == 1 and (backups[0] / "emotions.json").read_text() == "my tuning"
+    assert (lf / "emotions.json").read_text() == "same"  # the bundled one is the release's again
+
+
 def test_new_profile_from_template(tmp_path):
     import shutil
     from voicecrucible.installer import profiles

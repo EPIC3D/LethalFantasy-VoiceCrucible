@@ -132,6 +132,26 @@ def _program_items(root: Path) -> list[Path]:
     return [p for p in root.iterdir() if p.name not in KEEP]
 
 
+def backup_changed_bundled_profiles(z: zipfile.ZipFile, prefix: str, root: Path) -> list[Path]:
+    """Copy a bundled profile that differs from the new release (edited by the user, or with files added) to
+    profiles\\<name>.backup-<date>\\ before the update replaces it. Returns the backup folders."""
+    from datetime import datetime
+    made = []
+    for shipped in SHIPPED_PROFILES:
+        current = root / shipped
+        if not current.exists():
+            continue
+        new = {n[len(prefix + shipped):]: n for n in z.namelist()
+               if n.startswith(prefix + shipped) and not n.endswith("/")}
+        have = {p.relative_to(current).as_posix(): p for p in current.rglob("*") if p.is_file()}
+        changed = set(have) != set(new) or any(have[f].read_bytes() != z.read(new[f]) for f in have)
+        if changed:
+            target = current.with_name(f"{current.name}.backup-{datetime.now():%Y%m%d-%H%M%S}")
+            shutil.copytree(current, target)
+            made.append(target)
+    return made
+
+
 def install(data: bytes, root: Path = layout.ROOT) -> None:
     """Replace the program files with the (already verified) release zip; the old files go to previous\\."""
     previous = root / "previous"
@@ -144,6 +164,8 @@ def install(data: bytes, root: Path = layout.ROOT) -> None:
     staging.write_bytes(data)
     with zipfile.ZipFile(staging) as z:
         prefix = zip_prefix(z)
+        for folder in backup_changed_bundled_profiles(z, prefix, root):
+            _log.info("your changes to a bundled profile were saved to %s", folder)
         for member in z.infolist():
             name = member.filename[len(prefix):] if member.filename.startswith(prefix) else ""
             if not name:

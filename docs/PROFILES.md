@@ -20,7 +20,8 @@ pronunciation. No acting director (no character descriptions, no acting referenc
 (`[render] profile = "lethalfantasy"`), so rendering works right after setup.
 
 It is **part of the program**: every Voice Crucible update replaces it with the maintainer's current version.
-Don't edit it – make a copy instead.
+Don't edit it – make a copy instead. If you did change it anyway, the update first saves your version to
+`profiles\lethalfantasy.backup-<date>\` (the same for `template\`), so nothing is lost.
 
 ## Your own profile
 
