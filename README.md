@@ -63,6 +63,20 @@ settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/
 A PC without a supported GPU can still run the coordinator. AMD and Intel GPUs are not supported (yet).
 Details and measured speeds: [docs/GPU.md](docs/GPU.md).
 
+## What you see running
+
+Voice Crucible runs only while its windows are open – no service, no background process after you close them.
+
+| You started | Task Manager (0.1.0b5) | From 0.1.0b6 |
+|---|---|---|
+| `coordinator.cmd` | a console window with `python.exe` (from `runtime\venv\Scripts\`) | window title **Voice Crucible - coordinator** |
+| `worker.cmd` | a console window with `python.exe` (from `runtime\venv\Scripts\`) | window title **Voice Crucible - worker** |
+| `setup.cmd` | a console window with `uv.exe` / `python.exe` | window title **Voice Crucible - setup** |
+
+The process itself is always the private `python.exe` inside the Voice Crucible folder (Task Manager →
+Details → right-click → *Open file location* shows `...\VoiceCrucible\runtime\venv\Scripts\`). Optional
+Seed-VC runs as a second `python.exe` from `runtime\components\seed-vc\.venv\` while a worker uses it.
+
 ## Safety and transparency
 
 - Nothing is installed outside the Voice Crucible folder: no admin rights, no PATH changes, no background
