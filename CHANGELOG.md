@@ -5,7 +5,8 @@
 - **Watcher:** Pause/Resume rendering; per worker Stop (standby), Resume and Shutdown – each asks first and is only
   offered to workers that support it; "Unpair" moved to the pairing panel; current batch per worker (engine,
   lines done, current line); Output panel (pack folder, files per character, report, logs); says whether a
-  worker is older or newer than the coordinator.
+  worker is older or newer than the coordinator; for an offline worker it says why (e.g. "missing component –
+  run setup.cmd on that PC", "shut down from the watcher", or "no contact since 20:39").
 - **Memory Orb audiobook (story mode):** `crucible story --lines <export>` renders the pages (narrator, the
   Twins' coloured lines in their own voices), `--join` builds `voices/<language>/STORY/<page>.ogg`. The default
   profile has a narrator voice.

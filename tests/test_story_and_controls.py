@@ -78,6 +78,18 @@ def test_pause_stop_and_shutdown_controls():
     assert r.may_claim("w1") and not r.commands("w1")["shutdown"]
 
 
+def test_goodbye_shows_why_a_worker_is_offline():
+    r = WorkerRegistry()
+    r.seen("w1", "PC", "127.0.0.1", [], 5, session="a", features=["stop", "shutdown"])
+    r.set_mode("w1", "shutdown")
+    r.goodbye("w1", "shut down from the watcher – start worker.cmd on that PC")
+    w = r.snapshot()[0]
+    assert not w["online"] and w["exit_reason"].startswith("shut down") and w["last_contact"] and w["busy_lines"] == 0
+    r.seen("w1", "PC", "127.0.0.1", [], 0, session="b", features=["stop", "shutdown"])  # started again
+    w = r.snapshot()[0]
+    assert w["online"] and w["exit_reason"] == "" and w["mode"] == "run"
+
+
 def test_runner_stops_between_lines_and_reports_progress():
     job = Job("j", "test", [Line(key=f"K{i}", character="A", text="hi", uid=i) for i in range(5)])
     runner = Runner("cpu", max_batch=1)

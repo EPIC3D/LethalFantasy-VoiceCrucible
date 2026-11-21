@@ -225,6 +225,12 @@ def _result(state: CoordinatorState, worker: str, body: dict, _address: str) -> 
     return 200, {"accepted": accepted}
 
 
+def _bye(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:
+    """The worker program is closing; its reason is shown in the watcher."""
+    state.registry.goodbye(worker, str(body.get("reason", ""))[:200])
+    return 200, {"ok": True}
+
+
 def _export_best_take(state: CoordinatorState, line) -> None:
     """A line failed every attempt: export its best take anyway (like the original pipeline) and note it."""
     best = state.queue.best_take(line.uid)
@@ -244,4 +250,4 @@ def _release(state: CoordinatorState, worker: str, body: dict, _address: str) ->
 
 
 _ROUTES = {"/api/pair": _pair, "/api/heartbeat": _heartbeat, "/api/claim": _claim,
-           "/api/result": _result, "/api/release": _release, "/api/asset": _asset}
+           "/api/result": _result, "/api/release": _release, "/api/asset": _asset, "/api/bye": _bye}

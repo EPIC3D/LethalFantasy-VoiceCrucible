@@ -30,6 +30,8 @@ class WorkerState:
     progress: dict = field(default_factory=dict)  # current job: id, engine, lines, done, current line
     session: str = ""  # changes every time the worker program starts
     features: list = field(default_factory=list)  # e.g. ["stop", "shutdown"] – older workers send nothing
+    exit_reason: str = ""  # why the worker program ended (sent when it closes); "" while it runs
+    exit_at: float = 0.0
 
 
 MODES = ("run", "stop", "shutdown")
@@ -82,6 +84,7 @@ class WorkerRegistry:
                     w.mode = "run"
                 w.session = session[:64]
             w.features = [f for f in (features or []) if f in ("stop", "shutdown")]
+            w.exit_reason = ""  # it is running (again)
             p = progress if isinstance(progress, dict) else {}
             w.progress = {**{k: p[k][:120] for k in ("id", "engine", "current") if isinstance(p.get(k), str)},
                           **{k: p[k] for k in ("lines", "done") if type(p.get(k)) is int}}
@@ -92,6 +95,18 @@ class WorkerRegistry:
             if update_status.startswith("failed"):
                 w.update_requested = False
             return w.update_requested and accepts_updates
+
+    def goodbye(self, worker_id: str, reason: str) -> None:
+        """The worker program is closing: remember why, and show it as offline right away."""
+        with self._lock:
+            w = self._workers.get(worker_id)
+            if w is not None:
+                w.exit_reason = reason[:200] or "closed"
+                w.exit_at = time.time()
+                w.last_seen = w.exit_at - OFFLINE_AFTER_SECONDS - 1  # offline at once
+                w.busy_lines, w.progress = 0, {}
+                if w.mode == "shutdown":
+                    w.mode = "run"  # the shutdown is done; a restart works normally
 
     def request_update(self) -> list[str]:
         """Ask every online worker that allows it to update itself; returns their names."""
@@ -131,6 +146,7 @@ class WorkerRegistry:
                 d = asdict(w)
                 minutes = max((w.last_seen - w.first_seen) / 60, 1 / 60)
                 d["online"] = now - w.last_seen < OFFLINE_AFTER_SECONDS
+                d["last_contact"] = time.strftime("%H:%M", time.localtime(w.exit_at if w.exit_reason else w.last_seen))
                 d["lines_per_min"] = round((w.done + w.failed) / minutes, 1)
                 out.append(d)
         return sorted(out, key=lambda d: d["name"])

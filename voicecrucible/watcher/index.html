@@ -93,7 +93,10 @@ async function refresh() {
       const pr = w.progress || {};
       const batch = w.online && pr.lines ? `${esc(pr.engine)} · ${pr.done} / ${pr.lines} lines` +
         `<br><span class="sub">${esc(pr.current)}</span>` : "–";
-      return `<tr><td>${esc(w.name)}</td><td class="${w.online && state !== "stopped" ? "on" : "off"}">${state}</td>` +
+      const why = w.online || !w.last_contact ? "" : `<br><span class="sub">${w.exit_reason
+        ? esc(w.exit_reason) + " · " + esc(w.last_contact)
+        : "no contact since " + esc(w.last_contact) + " – window closed or network problem"}</span>`;
+      return `<tr><td>${esc(w.name)}</td><td class="${w.online && state !== "stopped" ? "on" : "off"}">${state}${why}</td>` +
         `<td>${batch}</td>` +
         `<td>${esc(g.name || "–")}</td><td>${vram}</td><td>${g.utilization_pct != null ? g.utilization_pct + " %" : "–"}</td>` +
         `<td>${w.done}</td><td>${w.failed}</td><td>${w.lines_per_min}</td>` +

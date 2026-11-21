@@ -98,6 +98,7 @@ class WorkerClient:
         self._update_wanted = threading.Event()  # set by a coordinator's update request (if allowed)
         self._cancel = threading.Event()  # watcher "Stop"/"Shutdown": stop the current job between lines
         self._session = os.urandom(8).hex()  # new on every start, so a "Shutdown" ends when the worker restarts
+        self.shutdown_requested = False
         self._update_status = ""
         self.exit_code = 0
         if runner.voice_path is None:
@@ -141,6 +142,17 @@ class WorkerClient:
             self.stop.set()
             self._hand_back()
             self.runner.close()
+
+    def say_goodbye(self, reason: str) -> None:
+        """Tell the coordinator why this worker closes (shown in the watcher). Best effort, quick."""
+        try:
+            with self._conn_lock:
+                conn = self._conn
+            if conn is not None:
+                conn.timeout = 5
+                conn.post("/api/bye", {"reason": reason})
+        except OSError:
+            pass  # the watcher then shows "no contact since …"
 
     def _self_update(self) -> bool:
         """Update this worker from GitHub after a coordinator's request. The coordinator sends no code: the
@@ -243,6 +255,7 @@ class WorkerClient:
                         self._cancel.clear()  # resumed from the watcher
                     if answer.get("shutdown"):
                         _log.info("shut down from the watcher – start worker.cmd here to use this PC again")
+                        self.shutdown_requested = True
                         self.stop.set()  # the main loop hands the job back and the worker exits
                     if answer.get("update_requested") and self.cfg.worker.allow_update_requests:
                         self._update_wanted.set()  # done between two jobs by the main loop
@@ -297,14 +310,25 @@ def run(cfg: Config) -> int:
         _log.error("%s", e)
         return 1
     _log.info("worker '%s' started – press Ctrl+C to stop", client.ident.name)
+    reason, code = "closed", 0
     try:
         client.run()
+        if client.exit_code == RESTART_EXIT_CODE:
+            reason = "restarting after an update"
+        elif client.shutdown_requested:
+            reason = "shut down from the watcher – start worker.cmd on that PC"
+        code = client.exit_code
     except KeyboardInterrupt:
         _log.info("stopped")
-    except (NotPaired, MissingComponent) as e:
+        reason = "stopped on that PC (Ctrl+C or window closed)"
+    except MissingComponent as e:
         _log.error("%s", e)
-        return 1
+        reason, code = "missing component – run setup.cmd on that PC", 1
+    except NotPaired as e:
+        _log.error("%s", e)
+        return 1  # the coordinator does not accept this worker any more: nothing to tell it
     except FingerprintMismatch as e:
         _log.error("SECURITY: %s – stopping. If you reinstalled the coordinator, pair again.", e)
-        return 1
-    return client.exit_code
+        return 1  # never talk to an unknown certificate
+    client.say_goodbye(reason)
+    return code
