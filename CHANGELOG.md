@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.0b3 – unreleased
+## 0.1.0b3 – 2026-11-21
+
+Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards, against LethalFantasy beta 1.0.3.
 
 - **Bundled default profile `lethalfantasy`:** the voices and settings of the LethalFantasy TTS demo
   (Chatterbox reference voices, emotion table, expressions, pronunciation; no acting director). Rendering
