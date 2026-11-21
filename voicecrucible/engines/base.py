@@ -39,6 +39,7 @@ class Engine(ABC):
     """Base class of all engines."""
 
     name: str = ""
+    batch_lines: int | None = None  # lines per render() call; 1 = no real batching (lets a stop take effect sooner)
 
     @abstractmethod
     def load(self, device: str) -> None:

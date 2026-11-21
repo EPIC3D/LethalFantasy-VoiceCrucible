@@ -40,16 +40,25 @@ class Runner:
         self.output_format = output_format
         self._engine: base.Engine | None = None
         self._checks = CheckSet(device)
+        self.progress: dict = {}  # current job: id, engine, lines, done, current line – shown in the watcher
 
-    def render(self, job: Job) -> list[TakeResult]:
-        """Render and check every line of the job."""
+    def render(self, job: Job, cancel: Callable[[], bool] | None = None) -> list[TakeResult]:
+        """Render and check the lines of the job; stops early (between chunks) when `cancel()` turns True –
+        the results so far are returned, the caller gives the rest of the job back."""
+        self.progress = {"id": job.job_id[:8], "engine": job.engine, "lines": len(job.lines), "done": 0,
+                         "current": job.lines[0].file_stem if job.lines else ""}
         engine = self._engine_for(job.engine)
         self._checks.configure(job.settings)
         voices = {ln.voice: self._voice(ln.voice) for ln in job.lines if ln.voice}
         results: list[TakeResult] = []
         i = 0
         while i < len(job.lines):
-            chunk = job.lines[i:i + self.batch_size]
+            self.progress.update(done=i, current=job.lines[i].file_stem)
+            if cancel is not None and cancel():
+                _log.info("job %s stopped after %d of %d line(s)", job.job_id[:8], i, len(job.lines))
+                break
+            size = min(self.batch_size, engine.batch_lines or self.batch_size)
+            chunk = job.lines[i:i + size]
             try:
                 audios = engine.render(chunk, voices)
             except base.OutOfMemory:

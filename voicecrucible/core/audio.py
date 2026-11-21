@@ -9,6 +9,7 @@ import soundfile as sf
 
 LEAD_IN_SECONDS = 0.15  # silence before the voice, so the first word is never clipped on playback
 OGG_QUALITY = 0.6  # libsndfile Vorbis quality 0..1 (≈ ffmpeg -q:a 6 of the old pipeline)
+_OGG_BLOCK = 8192  # frames per write call
 
 
 def decode(data: bytes) -> tuple[np.ndarray, int]:
@@ -42,8 +43,11 @@ def encode(y: np.ndarray, sr: int, fmt: str = "ogg") -> bytes:
     """Encode mono samples as 'ogg' (Vorbis) or 'wav' (16-bit PCM)."""
     buf = io.BytesIO()
     if fmt == "ogg":
-        sf.write(buf, np.clip(y, -1, 1), sr, format="OGG", subtype="VORBIS",
-                 compression_level=1 - OGG_QUALITY)
+        # written in blocks: libsndfile crashes the whole process when a long Vorbis file is written in one call
+        data = np.clip(y, -1, 1).astype(np.float32)
+        with sf.SoundFile(buf, "w", sr, 1, format="OGG", subtype="VORBIS", compression_level=1 - OGG_QUALITY) as f:
+            for i in range(0, len(data), _OGG_BLOCK):
+                f.write(data[i:i + _OGG_BLOCK])
     elif fmt == "wav":
         sf.write(buf, np.clip(y, -1, 1), sr, format="WAV", subtype="PCM_16")
     else:

@@ -1,3 +1,6 @@
 # Not installed: resemblyzer asks for webrtcvad, which needs a C compiler on Windows.
 # webrtcvad-wheels (in requirements.txt) provides the same module as a ready wheel.
 webrtcvad ; sys_platform == "never"
+# Not installed: gradio is only Seed-VC's demo web UI (not used by Voice Crucible) and pins an old, vulnerable Pillow.
+gradio ; sys_platform == "never"
+gradio-client ; sys_platform == "never"

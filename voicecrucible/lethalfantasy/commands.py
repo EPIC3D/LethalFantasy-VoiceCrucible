@@ -108,6 +108,41 @@ def render(cfg: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def story(cfg: Config, args: argparse.Namespace) -> int:
+    """`crucible story --lines <export>`: queue the audiobook parts; with --join: build the finished pages."""
+    from voicecrucible.lethalfantasy import story as story_mod
+    profile = _load_profile(cfg, args.lines)
+    scfg = story_mod.load_config(profile.folder)
+    if scfg is None:
+        _log.error("the profile '%s' has no story.json – no audiobook settings", profile.folder.name)
+        return 1
+    texts = {r["key"]: r["text"] for r in lines._jsonl(args.texts or args.lines / "english_lines.jsonl")}
+    pages = {k: v for k, v in texts.items() if k.startswith(scfg.prefix)}
+    if not pages:
+        _log.error("no pages starting with %s in the export", scfg.prefix)
+        return 1
+    folder = cfg.path(cfg.paths.work_dir) / "coordinator"
+    try:
+        parts = story_mod.build_lines(pages, scfg, profile.lexicon, AssetStore(folder / "assets").add)
+    except FileNotFoundError as e:
+        _log.error("%s", e)
+        return 1
+    output_root, lang = cfg.path(cfg.paths.output_dir), cfg.render.language
+    if args.join:
+        joined, missing = story_mod.join_pages(output_root, lang, scfg, parts)
+        for page, absent in sorted(missing.items()):
+            _log.warning("%s not ready – %d part(s) missing", page, len(absent))
+        _log.info("%d page(s) written to %s", len(joined), output_root / "voices" / lang / scfg.folder)
+        return 0 if not missing else 1
+    todo = parts if args.all else [ln for ln in parts if not _has_output(output_root, lang, ln)]
+    queue = JobQueue(folder / "queue.sqlite", max_attempts=cfg.checks.max_attempts)
+    added = queue.add("chatterbox", todo)
+    queue.close()
+    _log.info("audiobook: %d page(s), %d part(s); %d queued (%d already rendered). When they are done: "
+              "crucible story --lines <export> --join", len(pages), len(parts), added, len(parts) - len(todo))
+    return 0
+
+
 def _scenes(source: list[lines.SourceLine], only: str) -> list[tuple[str, list[SceneLine]]]:
     """Lines grouped into scenes in game order; the player's choices are context only."""
     picked = sorted((s for s in source if not only or s.key.startswith(only)), key=lambda s: (s.scene, s.order))

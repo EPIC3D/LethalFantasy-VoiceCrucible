@@ -49,6 +49,12 @@ def export(src: Path, dst: Path) -> None:
         out[name] = {"folder": c["folder"], "prefix": c["prefix"], "voices": {"chatterbox": voice} if voice else {},
                      "chatterbox_adjust": c.get("chatterbox_adjust", [0.0, 0.0])}
     (dst / "characters.json").write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    story = src / "story.json"
+    if story.exists():  # Memory Orb audiobook: settings + its voices (e.g. the narrator)
+        shutil.copyfile(story, dst / "story.json")
+        for voice in json.loads(story.read_text(encoding="utf-8")).get("voices", {}).values():
+            (dst / voice).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src / voice, dst / voice)
     print(f"default profile written to {dst}:", ", ".join(sorted(p.name for p in dst.rglob("*") if p.is_file())))
 
 

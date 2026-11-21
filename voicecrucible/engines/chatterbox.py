@@ -18,6 +18,7 @@ class ChatterboxEngine(Engine):
     """Chatterbox with per-line reference voice, exaggeration and cfg weight."""
 
     name = "chatterbox"
+    batch_lines = 1  # Chatterbox renders line by line anyway
 
     def __init__(self) -> None:
         self._model = None

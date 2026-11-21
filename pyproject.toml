@@ -56,6 +56,8 @@ override-dependencies = [
     "safetensors==0.5.3",
     "diffusers==0.29.0",
     "librosa==0.11.0",
+    # security: Pillow < 13.0.0 has critical image-decoding bugs (Dependabot); it only comes in as a dependency
+    "pillow>=13.0.0",
     # not installed: webrtcvad needs a C compiler on Windows (webrtcvad-wheels provides the same module),
     # gradio is only Chatterbox's demo web UI, typing is an obsolete Python 2 backport
     "webrtcvad ; sys_platform == 'never'",

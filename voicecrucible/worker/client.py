@@ -96,6 +96,8 @@ class WorkerClient:
         self._unsent: dict | None = None  # results whose upload failed; sent before claiming new work
         self._job: Job | None = None  # job held right now (rendered or not), handed back on stop
         self._update_wanted = threading.Event()  # set by a coordinator's update request (if allowed)
+        self._cancel = threading.Event()  # watcher "Stop"/"Shutdown": stop the current job between lines
+        self._session = os.urandom(8).hex()  # new on every start, so a "Shutdown" ends when the worker restarts
         self._update_status = ""
         self.exit_code = 0
         if runner.voice_path is None:
@@ -181,7 +183,7 @@ class WorkerClient:
         self._job = job
         self._busy_lines = len(job.lines)
         try:
-            takes = self.runner.render(job)
+            takes = self.runner.render(job, cancel=self._cancel.is_set)
         except (ImportError, seedvc.SeedVCNotInstalled) as e:  # this machine lacks a component: not the lines' fault
             self._release(job, "", failed=False)
             self.stop.set()
@@ -197,6 +199,12 @@ class WorkerClient:
             {"uid": t.uid, "passed": t.passed, "reason": t.reason, "ext": t.ext, "score": t.score,
              "audio": base64.b64encode(t.audio).decode("ascii")} for t in takes]}
         self._upload(self._unsent)
+        if len(takes) < len(job.lines):  # stopped from the watcher: give the unrendered lines back
+            try:
+                self._post("/api/release", {"job_id": job.job_id, "reason": "", "failed": False})
+            except OSError as e:
+                _log.debug("release failed (the lease will expire instead): %s", e)
+            _log.info("stopped from the watcher – %d line(s) handed back", len(job.lines) - len(takes))
 
     def _upload(self, payload: dict) -> None:
         """Send results; kept in `_unsent` until the coordinator confirmed them."""
@@ -221,13 +229,23 @@ class WorkerClient:
                 job = self._job
                 status, answer = self._post("/api/heartbeat", {
                     "gpus": gpu.query(), "busy_lines": self._busy_lines, "job_id": job.job_id if job else "",
+                    "progress": self.runner.progress if self._busy_lines else {}, "session": self._session,
+                    "features": ["stop", "shutdown"],  # what the watcher may offer for this worker
                     "version": __version__, "protocol": protocol.PROTOCOL_VERSION,
                     "accepts_updates": self.cfg.worker.allow_update_requests, "update_status": self._update_status})
                 if status in (401, 426):
                     _log.error(answer.get("error", "the coordinator refused this worker"))
                     self.stop.set()
-                elif answer.get("update_requested") and self.cfg.worker.allow_update_requests:
-                    self._update_wanted.set()  # done between two jobs by the main loop
+                else:
+                    if answer.get("cancel"):
+                        self._cancel.set()
+                    else:
+                        self._cancel.clear()  # resumed from the watcher
+                    if answer.get("shutdown"):
+                        _log.info("shut down from the watcher – start worker.cmd here to use this PC again")
+                        self.stop.set()  # the main loop hands the job back and the worker exits
+                    if answer.get("update_requested") and self.cfg.worker.allow_update_requests:
+                        self._update_wanted.set()  # done between two jobs by the main loop
             except FingerprintMismatch as e:
                 _log.error("SECURITY: %s – stopping. If you reinstalled the coordinator, pair again.", e)
                 self.stop.set()

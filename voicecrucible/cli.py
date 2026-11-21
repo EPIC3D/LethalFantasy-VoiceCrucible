@@ -22,6 +22,7 @@ COMMANDS = {
     "report": "summarise a finished render (passed, failed, reasons)",
     "config": "show the effective configuration and check it for errors",
     "diagnose": "collect technical facts for a bug report (personal data removed)",
+    "story": "Memory Orb audiobook: queue its parts, then --join them into pages",
     "update": "check GitHub for a new version and install it after you confirm (signature verified)",
     "profile": "create a profile from the template (new), list profiles, or install a shared profile pack",
 }
@@ -59,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--all", action="store_true", help="also lines that already have a voice file (render them again)")
     r.add_argument("--retry-failed", action="store_true", help="queue the lines that failed for good again")
     r.add_argument("--test", type=int, metavar="N", help="queue N test lines (beep engine, no model needed)")
+    st = cmds["story"]
+    st.add_argument("--lines", type=Path, required=True, help="folder with the plugin's line export")
+    st.add_argument("--texts", type=Path, help="page texts in another language (default: the export's English)")
+    st.add_argument("--join", action="store_true", help="join the rendered parts into STORY/<page>.ogg")
+    st.add_argument("--all", action="store_true", help="also parts that are already rendered")
     s = cmds["setup"]
     s.add_argument("--components", default="", help="comma-separated, e.g. checks,chatterbox,qwen,seedvc "
                    "(default: asked; see downloads.toml)")
@@ -216,7 +222,13 @@ def _cmd_update(cfg: config_mod.Config, args: argparse.Namespace) -> int:
 
 _HANDLERS = {"coordinator": _cmd_coordinator, "worker": _cmd_worker, "pair": _cmd_pair, "render": _cmd_render,
              "direct": _cmd_direct, "report": _cmd_report, "setup": _cmd_setup, "diagnose": _cmd_diagnose,
-             "update": _cmd_update, "profile": _cmd_profile}
+             "update": _cmd_update, "profile": _cmd_profile, "story": lambda c, a: _cmd_story(c, a)}
+
+
+def _cmd_story(cfg: config_mod.Config, args: argparse.Namespace) -> int:
+    """Memory Orb audiobook."""
+    from voicecrucible.lethalfantasy import commands
+    return _with_profile(commands.story, cfg, args)
 
 
 if __name__ == "__main__":

@@ -161,16 +161,21 @@ def _heartbeat(state: CoordinatorState, worker: str, body: dict, address: str) -
     name = state.pairing.paired().get(worker, {}).get("name", worker)
     update_now = state.registry.seen(worker, name, address, [g for g in gpus if isinstance(g, dict)], busy,
                                      str(body.get("version", "")), body.get("accepts_updates") is True,
-                                     str(body.get("update_status", "")))
+                                     str(body.get("update_status", "")), body.get("progress"),
+                                     str(body.get("session", "")),
+                                     body.get("features") if isinstance(body.get("features"), list) else [])
     job_id = body.get("job_id")
     if isinstance(job_id, str) and job_id:
         state.queue.touch(worker, job_id[:64])
-    return 200, {"ok": True, "update_requested": update_now, "protocol": protocol.PROTOCOL_VERSION}
+    return 200, {"ok": True, "update_requested": update_now, "protocol": protocol.PROTOCOL_VERSION,
+                 **state.registry.commands(worker)}
 
 
 def _claim(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:
-    """Hand out the next job, or {"job": null} when the queue is empty."""
+    """Hand out the next job, or {"job": null} when the queue is empty, rendering is paused or the worker stopped."""
     requested = body.get("max_lines") if isinstance(body.get("max_lines"), int) else 1
+    if not state.registry.may_claim(worker):
+        return 200, {"job": None}
     job = state.queue.claim(worker, state.registry.batch_size(requested))
     if job is not None:
         job.settings = {} if job.engine == "test" else state.check_settings  # beeps would fail every check

@@ -34,9 +34,9 @@
 
 <div class="panel">
   <h2>Workers</h2>
-  <table><thead><tr><th>Name</th><th>State</th><th>GPU</th><th>VRAM</th><th>Load</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
+  <table><thead><tr><th>Name</th><th>State</th><th>Current batch</th><th>GPU</th><th>VRAM</th><th>Load</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
   <tbody id="workers"></tbody></table>
-  <p><button onclick="requestUpdate()">Update workers</button></p>
+  <p><button id="pause" onclick="togglePause()">Pause rendering</button> <button onclick="requestUpdate()">Update workers</button></p>
   <div class="sub">Asks every online worker that allows it (<code>allow_update_requests = true</code>) to update itself
     from GitHub; each worker checks the signature itself. Update the workers first and this coordinator last
     (<code>crucible update</code> on this computer).</div>
@@ -50,10 +50,11 @@
 </div>
 
 <div class="panel">
-  <h2>Pair a new worker</h2>
+  <h2>Pairing</h2>
   <div id="pair"></div>
   <button onclick="newCode()">New pairing code</button>
   <div class="sub">On the worker machine run <code>pair.cmd</code> and type the code. It works once and expires after 10 minutes.</div>
+  <table><thead><tr><th>Paired workers</th><th></th></tr></thead><tbody id="paired"></tbody></table>
 </div>
 
 <div class="panel">
@@ -81,15 +82,27 @@ async function refresh() {
     document.getElementById("workers").innerHTML = st.workers.map(w => {
       const g = (w.gpus || [])[0] || {};
       const vram = g.memory_total_mb ? `${(g.memory_used_mb/1024).toFixed(1)} / ${(g.memory_total_mb/1024).toFixed(1)} GB` : "–";
-      return `<tr><td>${esc(w.name)}</td><td class="${w.online ? "on" : "off"}">${w.online ? (w.busy_lines ? "rendering" : "idle") : "offline"}</td>` +
+      const state = !w.online ? "offline" : w.mode === "shutdown" ? "shutting down" : w.mode === "stop"
+        ? (w.busy_lines ? "stopping" : "stopped") : st.paused ? (w.busy_lines ? "pausing" : "paused")
+        : w.busy_lines ? "rendering" : "idle";
+      const ctl = !w.online ? "" : !(w.features || []).includes("stop")
+        ? `<span class="sub">Stop / Shutdown need worker 0.1.0b6+ – update it</span>` :
+        (w.mode === "stop" ? `<button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="setMode(this, 'run')">Resume</button>`
+                           : `<button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="setMode(this, 'stop')">Stop</button>`) +
+        ` <button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="setMode(this, 'shutdown')">Shutdown</button>`;
+      const pr = w.progress || {};
+      const batch = w.online && pr.lines ? `${esc(pr.engine)} · ${pr.done} / ${pr.lines} lines` +
+        `<br><span class="sub">${esc(pr.current)}</span>` : "–";
+      return `<tr><td>${esc(w.name)}</td><td class="${w.online && state !== "stopped" ? "on" : "off"}">${state}</td>` +
+        `<td>${batch}</td>` +
         `<td>${esc(g.name || "–")}</td><td>${vram}</td><td>${g.utilization_pct != null ? g.utilization_pct + " %" : "–"}</td>` +
         `<td>${w.done}</td><td>${w.failed}</td><td>${w.lines_per_min}</td>` +
         `<td class="${w.version_state === "older" ? "retry" : ""}">${esc(w.version || "–")}` +
         `${w.version_state === "older" ? "<br><span class=\"sub\">older – update this worker</span>" : ""}` +
         `${w.version_state === "newer" ? "<br><span class=\"sub\">newer – update the coordinator</span>" : ""}` +
         `${w.update_status && w.online ? "<br><span class=\"sub\">" + esc(w.update_status) + "</span>" : ""}</td>` +
-        `<td><button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="revoke(this)">Remove</button></td></tr>`;
-    }).join("") || `<tr><td colspan="10" class="off">No paired workers yet.</td></tr>`;
+        `<td style="white-space:nowrap">${ctl}</td></tr>`;
+    }).join("") || `<tr><td colspan="11" class="off">No paired workers yet.</td></tr>`;
     const o = st.output || {};
     document.getElementById("output").innerHTML =
       `Voice pack: <code>${esc(o.pack)}</code> · language <b>${esc(o.language)}</b> · profile <b>${esc(o.profile)}</b><br>` +
@@ -98,6 +111,11 @@ async function refresh() {
     document.getElementById("folders").innerHTML = (o.folders || []).map(f =>
       `<tr><td>${esc(f.folder)}</td><td>${f.files}</td><td><code>${esc(f.path)}</code></td></tr>`).join("")
       || `<tr><td colspan="3" class="off">No files yet.</td></tr>`;
+    paused = st.paused;
+    document.getElementById("pause").textContent = paused ? "Resume rendering" : "Pause rendering";
+    document.getElementById("paired").innerHTML = (st.paired || []).map(w =>
+      `<tr><td>${esc(w.name)}</td><td><button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="unpair(this)">Unpair</button></td></tr>`).join("")
+      || `<tr><td colspan="2" class="off">No paired workers.</td></tr>`;
     const p = st.pairing_code;
     document.getElementById("pair").innerHTML = p
       ? `<div class="code">${esc(p.code)}</div><div class="sub">valid for ${dur(p.seconds_left)}</div>` : "";
@@ -116,10 +134,24 @@ async function requestUpdate() {
                          : "No online worker allows update requests (allow_update_requests = true on the worker).");
   refresh();
 }
-async function newCode() { await fetch("/api/pairing-code", {method: "POST", headers: H}); refresh(); }
-async function revoke(btn) {
+let paused = false;
+async function togglePause() {
+  if (!paused && !confirm("Pause? The workers finish their current batch and then wait.")) return;
+  await fetch("/api/pause", {method: "POST", headers: H, body: JSON.stringify({paused: !paused})}); refresh();
+}
+async function setMode(btn, mode) {
   const id = btn.dataset.id, name = btn.dataset.name;
-  if (!confirm(`Remove worker "${name}"? It has to pair again to work for this coordinator.`)) return;
+  const ask = {
+    stop: `Stop worker "${name}"? It hands back its unfinished lines and waits for new jobs.`,
+    shutdown: `Shut down worker "${name}"? The program on that PC closes. To use it again, start worker.cmd on that PC.`,
+  }[mode];
+  if (ask && !confirm(ask)) return;
+  await fetch("/api/worker", {method: "POST", headers: H, body: JSON.stringify({worker_id: id, mode})}); refresh();
+}
+async function newCode() { await fetch("/api/pairing-code", {method: "POST", headers: H}); refresh(); }
+async function unpair(btn) {
+  const id = btn.dataset.id, name = btn.dataset.name;
+  if (!confirm(`Unpair worker "${name}"? It can no longer work for this coordinator until it pairs again.`)) return;
   await fetch("/api/revoke", {method: "POST", headers: H, body: JSON.stringify({worker_id: id})}); refresh();
 }
 refresh(); setInterval(refresh, 3000);

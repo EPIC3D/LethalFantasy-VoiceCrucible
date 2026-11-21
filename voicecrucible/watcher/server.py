@@ -41,7 +41,7 @@ def status(state: CoordinatorState) -> dict:
         if not any(w["worker_id"] == wid for w in workers):
             workers.append({"worker_id": wid, "name": info["name"], "online": False, "gpus": [], "done": 0,
                             "failed": 0, "busy_lines": 0, "lines_per_min": 0, "address": "", "version": "",
-                            "accepts_updates": False, "update_status": ""})
+                            "accepts_updates": False, "update_status": "", "mode": "run"})
     for w in workers:
         w["version_state"] = _compare(w.get("version", ""))
     speed = sum(w["lines_per_min"] for w in workers if w["online"])
@@ -50,6 +50,8 @@ def status(state: CoordinatorState) -> dict:
     return {
         "coordinator_id": state.identity.coordinator_id,
         "version": __version__,
+        "paused": state.registry.paused,
+        "paired": [{"worker_id": wid, "name": info["name"]} for wid, info in paired.items()],
         "fingerprint": protocol.short_fingerprint(state.identity.fingerprint),
         "counts": counts,
         "eta_seconds": round(remaining / speed * 60) if speed > 0 and remaining else None,
@@ -108,12 +110,21 @@ def make_server(state: CoordinatorState, port: int) -> ThreadingHTTPServer:
                 names = state.registry.request_update()
                 _log.info("update requested in the watcher for: %s", ", ".join(names) or "nobody")
                 self._json(200, {"workers": names})
-            elif self.path == "/api/revoke":
+            elif self.path == "/api/pause":
+                state.registry.paused = self._body().get("paused") is True
+                _log.info("rendering %s in the watcher", "paused" if state.registry.paused else "resumed")
+                self._json(200, {"paused": state.registry.paused})
+            elif self.path == "/api/worker":
+                body = self._body()
                 try:
-                    length = min(int(self.headers.get("Content-Length", "0")), 4096)
-                    worker_id = json.loads(self.rfile.read(length) or b"{}").get("worker_id", "")
-                except (ValueError, AttributeError):
-                    worker_id = ""
+                    ok = state.registry.set_mode(str(body.get("worker_id", "")), str(body.get("mode", "")))
+                except ValueError:
+                    ok = False
+                if ok:
+                    _log.info("worker %s set to '%s' in the watcher", body.get("worker_id"), body.get("mode"))
+                self._json(200 if ok else 404, {"ok": ok})
+            elif self.path == "/api/revoke":
+                worker_id = self._body().get("worker_id", "")
                 ok = isinstance(worker_id, str) and state.pairing.revoke(worker_id)
                 if ok:
                     state.registry.forget(worker_id)
@@ -121,6 +132,15 @@ def make_server(state: CoordinatorState, port: int) -> ThreadingHTTPServer:
                 self._json(200 if ok else 404, {"revoked": ok})
             else:
                 self._json(404, {"error": "not found"})
+
+        def _body(self) -> dict:
+            """Small JSON body of an action (at most 4 KB); {} when missing or invalid."""
+            try:
+                length = min(int(self.headers.get("Content-Length", "0")), 4096)
+                data = json.loads(self.rfile.read(length) or b"{}")
+            except ValueError:
+                return {}
+            return data if isinstance(data, dict) else {}
 
         def _json(self, code: int, obj: dict) -> None:
             self._send(code, json.dumps(obj).encode(), "application/json")

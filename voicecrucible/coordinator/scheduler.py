@@ -26,24 +26,65 @@ class WorkerState:
     accepts_updates: bool = False
     update_requested: bool = False
     update_status: str = ""
+    mode: str = "run"  # run | stop (standby, connected) | shutdown (asked to close)
+    progress: dict = field(default_factory=dict)  # current job: id, engine, lines, done, current line
+    session: str = ""  # changes every time the worker program starts
+    features: list = field(default_factory=list)  # e.g. ["stop", "shutdown"] – older workers send nothing
+
+
+MODES = ("run", "stop", "shutdown")
 
 
 class WorkerRegistry:
-    """Thread-safe table of workers seen since the coordinator started."""
+    """Thread-safe table of workers seen since the coordinator started, plus the global pause switch."""
 
     def __init__(self, max_batch: int = 16):
         self._lock = threading.Lock()
         self._workers: dict[str, WorkerState] = {}
         self.max_batch = max_batch
+        self.paused = False
+
+    def set_mode(self, worker_id: str, mode: str) -> bool:
+        """Stop (standby), resume or shut down one worker; False when the worker is unknown."""
+        if mode not in MODES:
+            raise ValueError(f"unknown mode {mode!r}")
+        with self._lock:
+            w = self._workers.get(worker_id)
+            if w is None or (mode != "run" and mode not in w.features):
+                return False  # unknown, or an older worker that would not react
+            w.mode = mode
+            return True
+
+    def may_claim(self, worker_id: str) -> bool:
+        """New work only when rendering is not paused and this worker is not stopped."""
+        with self._lock:
+            w = self._workers.get(worker_id)
+            return not self.paused and (w is None or w.mode == "run")
+
+    def commands(self, worker_id: str) -> dict:
+        """What the heartbeat answer tells a worker: cancel its current job, shut down."""
+        with self._lock:
+            w = self._workers.get(worker_id)
+            mode = w.mode if w else "run"
+        return {"cancel": mode in ("stop", "shutdown"), "shutdown": mode == "shutdown", "paused": self.paused}
 
     def seen(self, worker_id: str, name: str, address: str, gpus: list[dict], busy_lines: int,
-             version: str = "", accepts_updates: bool = False, update_status: str = "") -> bool:
+             version: str = "", accepts_updates: bool = False, update_status: str = "",
+             progress: dict | None = None, session: str = "", features: list | None = None) -> bool:
         """Record a heartbeat; returns True when the worker should update itself now."""
         now = time.time()
         with self._lock:
             w = self._workers.get(worker_id)
             if w is None:
                 w = self._workers[worker_id] = WorkerState(worker_id, name, address, now, now)
+            if session and session != w.session:  # the worker program (re)started: a shutdown is over
+                if w.session and w.mode == "shutdown":
+                    w.mode = "run"
+                w.session = session[:64]
+            w.features = [f for f in (features or []) if f in ("stop", "shutdown")]
+            p = progress if isinstance(progress, dict) else {}
+            w.progress = {**{k: p[k][:120] for k in ("id", "engine", "current") if isinstance(p.get(k), str)},
+                          **{k: p[k] for k in ("lines", "done") if type(p.get(k)) is int}}
             if w.version and version and version != w.version:
                 w.update_requested = False  # it came back with a new version: done
             w.name, w.address, w.last_seen, w.gpus, w.busy_lines = name[:64], address, now, gpus[:8], busy_lines

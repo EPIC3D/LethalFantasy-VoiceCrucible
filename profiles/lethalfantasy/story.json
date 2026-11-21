@@ -1,0 +1,17 @@
+{
+  "_comment": "Memory Orb audiobook (story mode). Pages = translation keys starting with prefix; <color=...> parts are read by the mapped speaker, everything else by the narrator. Output: voices/<language>/<folder>/<page key>.ogg. params = Chatterbox settings per speaker (from the original audiobook).",
+  "prefix": "TWINS_TEASER_",
+  "folder": "STORY",
+  "narrator": "Narrator",
+  "colors": {"red": "RedTwin", "#ff0000": "RedTwin", "#00ffff": "BlueTwin"},
+  "voices": {
+    "Narrator": "voices/chatterbox/Narrator.wav",
+    "RedTwin": "voices/chatterbox/RedTwin.wav",
+    "BlueTwin": "voices/chatterbox/BlueTwin.wav"
+  },
+  "params": {
+    "Narrator": {"exaggeration": 0.45, "cfg_weight": 0.5},
+    "RedTwin": {"exaggeration": 0.7, "cfg_weight": 0.4},
+    "BlueTwin": {"exaggeration": 0.5, "cfg_weight": 0.48}
+  }
+}
