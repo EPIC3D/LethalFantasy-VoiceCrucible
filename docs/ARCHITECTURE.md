@@ -204,3 +204,10 @@ disk, OS – filled in from real measurements, plus "Reporting bugs") · `docs/I
 4. `directors` (none / file / api) + `lethalfantasy` package + end-to-end render of a small test set.
 5. Installer (`gpucheck`, `downloads.toml`, uv lock) + test on clean machines with different GPU generations (e.g. RTX 40 and RTX 50 series).
 6. Documentation pass, then the first release.
+
+## Ideas for later
+
+- **Memory Orb audiobook (story mode):** a page script in the profile (segments with their speaker), render
+  per segment with each speaker's voice, join into `voices/<language>/STORY/<page key>.ogg`, optional sound
+  effects taken from the user's own game.
+- Linux / WSL2 test, `local_worker` switch (coordinator starts a worker on the same PC).

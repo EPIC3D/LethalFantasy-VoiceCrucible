@@ -11,6 +11,8 @@ one machine or several on your local network.
   failed lines again.
 - Default packs with Chatterbox; optional **acting packs** (Qwen3-TTS + Seed-VC) with per-line acting directions.
 - Several PCs can render together; progress in a small web page (the watcher).
+- Not included (yet): the Memory Orb audiobook (`voices\<language>\STORY\`) – the plugin plays it, but Voice
+  Crucible does not render it.
 
 ## How it works
 
