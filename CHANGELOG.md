@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.1.0b6 – unreleased
+## 0.1.0b6 – 2026-11-22
+
+Tested on Windows 11 with an NVIDIA RTX 40 series card (coordinator, watcher and worker on one PC), against
+LethalFantasy beta 1.0.3. Stop / Shutdown of remote workers were not tested with this version yet.
 
 - **Watcher as the main window:** a **Render** panel (line export folder with *Browse…*, engine, "only keys
   starting with", line limit, render again, texts file for other languages) with *Check (dry run)*, *Start
