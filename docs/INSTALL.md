@@ -20,16 +20,27 @@ Uninstall = delete the folder.
 - **Voices**: the bundled `lethalfantasy` profile (the plugin's demo voices) is used by default – nothing to do.
   For your own voices see [PROFILES.md](PROFILES.md).
 - **Lines**: in the LethalFantasy TTS plugin set `[Developer] ExportLines = true` in `BepInEx\config\lf-tts.cfg`,
-  start the game once, then set it back to `false`. The export is in `<game>\BepInEx\LethalFantasyTTS\`.
+  start a game and play until the first dialogue line appears (the export is written then, not at the main
+  menu), then set it back to `false`. The export is in `<game>\BepInEx\LFTTS-export\` (plugin 0.5.1+;
+  0.5.0 wrote it to `<game>\BepInEx\LethalFantasyTTS\`).
 
 ## 3. Render (one machine)
 
-Open a command prompt in the Voice Crucible folder:
+**In the watcher (easiest):**
+
+1. `coordinator.cmd` – keep this window open, then `watcher.cmd` (opens http://127.0.0.1:5132).
+2. Workers panel: **Pair and start worker on this PC** (pairs once, then opens the worker in its own window).
+3. Render panel: *Browse…* to `<game>\BepInEx\LFTTS-export`, **Check (dry run)** (shows what would be
+   rendered), then **Start rendering**.
+4. When done: **Report**. The voice pack is in `output\voices\en\AKIPO|RED|BLUE\`, lines with problems are
+   listed in `output\report.tsv`.
+
+**Or on the command line** (the buttons run exactly these commands), in the Voice Crucible folder:
 
 1. `coordinator.cmd` – keep this window open (job queue + watcher).
 2. Pair this machine as its own worker, once: `pair.cmd`, enter the code shown by the coordinator.
 3. `worker.cmd` – keep it open.
-4. Queue the lines: `crucible.cmd render --lines "<game>\BepInEx\LethalFantasyTTS"`
+4. Queue the lines: `crucible.cmd render --lines "<game>\BepInEx\LFTTS-export"`
    - try first with `--dry-run` (shows what would be queued) or `--limit 20`.
 5. Watch the progress: `watcher.cmd` (opens http://127.0.0.1:5132).
 6. When done: `crucible.cmd report`. The voice pack is in `output\voices\en\AKIPO|RED|BLUE\`, lines with

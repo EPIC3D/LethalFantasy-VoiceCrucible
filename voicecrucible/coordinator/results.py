@@ -43,12 +43,15 @@ def save_candidate(folder: Path, line: Line, ext: str, data: bytes) -> Path:
 
 
 def save(root: Path, language: str, line: Line, ext: str, data: bytes) -> Path:
-    """Write one audio file atomically (a half-written file is never left behind)."""
+    """Write one audio file atomically (a half-written file is never left behind). A file that is already there
+    (rendered again with --all, perhaps edited by hand) is kept as <name>.bak.<ext>."""
     if len(data) > MAX_AUDIO_BYTES:
         raise ValueError("audio file too large")
     target = output_path(root, language, line, ext)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(target.name + ".part")
     tmp.write_bytes(data)
+    if target.exists():
+        target.replace(target.with_name(f"{target.stem}.bak.{ext}"))
     tmp.replace(target)
     return target

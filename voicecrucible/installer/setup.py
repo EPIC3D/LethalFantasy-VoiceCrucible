@@ -145,5 +145,7 @@ def run(cfg: Config, args: argparse.Namespace) -> int:
         _log.error("installation stopped: %s – details in the install log (logs\\setup_*.log)", e)
         return 1
     path = inventory.write(root, keys)
+    from voicecrucible.installer import setupstate
+    setupstate.record(root)
     _log.info("done. Installed parts and their folders: %s", path)
     return 0

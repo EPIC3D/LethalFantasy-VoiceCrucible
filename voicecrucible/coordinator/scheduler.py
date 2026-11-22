@@ -86,8 +86,9 @@ class WorkerRegistry:
             w.features = [f for f in (features or []) if f in ("stop", "shutdown")]
             w.exit_reason = ""  # it is running (again)
             p = progress if isinstance(progress, dict) else {}
-            w.progress = {**{k: p[k][:120] for k in ("id", "engine", "current") if isinstance(p.get(k), str)},
-                          **{k: p[k] for k in ("lines", "done") if type(p.get(k)) is int}}
+            w.progress = {**{k: p[k][:120] for k in ("id", "engine", "current", "phase") if isinstance(p.get(k), str)},
+                          **{k: p[k] for k in ("lines", "done") if type(p.get(k)) is int},
+                          **({"models_gb": float(p["models_gb"])} if type(p.get("models_gb")) in (int, float) else {})}
             if w.version and version and version != w.version:
                 w.update_requested = False  # it came back with a new version: done
             w.name, w.address, w.last_seen, w.gpus, w.busy_lines = name[:64], address, now, gpus[:8], busy_lines

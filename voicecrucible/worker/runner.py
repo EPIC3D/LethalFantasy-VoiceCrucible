@@ -29,6 +29,28 @@ class TakeResult:
     score: float = -1.0  # audio quality (MOS) of the take, used to pick the best take if every attempt fails
 
 
+def models_folder() -> Path:
+    """Where downloaded models are kept (runtime/models, see installer.layout)."""
+    import os
+    hf = os.environ.get("HF_HOME")
+    return Path(hf).parent if hf else Path.home() / ".cache"
+
+
+def _folder_bytes(folder: Path) -> int:
+    """Total size of the files below `folder` (0 when it does not exist)."""
+    total = 0
+    try:
+        for f in folder.rglob("*"):
+            try:
+                if f.is_file():
+                    total += f.stat().st_size
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return total
+
+
 class Runner:
     """Keeps one engine and one check set loaded and renders jobs with them."""
 
@@ -42,13 +64,22 @@ class Runner:
         self._checks = CheckSet(device)
         self.progress: dict = {}  # current job: id, engine, lines, done, current line – shown in the watcher
 
+    def progress_snapshot(self) -> dict:
+        """The progress for the heartbeat; while a model loads, also the size of the model folder (it grows while
+        a model is downloaded the first time, so the watcher can show that the worker is not stuck)."""
+        snap = dict(self.progress)
+        if snap.get("phase") == "loading":
+            snap["models_gb"] = round(_folder_bytes(models_folder()) / 1e9, 2)
+        return snap
+
     def render(self, job: Job, cancel: Callable[[], bool] | None = None) -> list[TakeResult]:
         """Render and check the lines of the job; stops early (between chunks) when `cancel()` turns True –
         the results so far are returned, the caller gives the rest of the job back."""
         self.progress = {"id": job.job_id[:8], "engine": job.engine, "lines": len(job.lines), "done": 0,
-                         "current": job.lines[0].file_stem if job.lines else ""}
+                         "current": job.lines[0].file_stem if job.lines else "", "phase": "loading"}
         engine = self._engine_for(job.engine)
         self._checks.configure(job.settings)
+        self.progress["phase"] = "rendering"
         voices = {ln.voice: self._voice(ln.voice) for ln in job.lines if ln.voice}
         results: list[TakeResult] = []
         i = 0

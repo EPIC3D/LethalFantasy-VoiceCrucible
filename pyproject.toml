@@ -29,6 +29,8 @@ checks = [
 chatterbox = [
     "voicecrucible[gpu]",
     "chatterbox-tts==0.1.7",
+    # faster model downloads from Hugging Face; huggingface-hub's own marker misses Windows ("AMD64")
+    "hf-xet==1.8.0",
     "conformer==0.3.2",
     "diffusers==0.38.0",
     "librosa==0.11.0",
@@ -41,6 +43,7 @@ chatterbox = [
 qwen = [
     "voicecrucible[gpu]",
     "qwen-tts==0.1.1",
+    "hf-xet==1.8.0",
     "accelerate==1.12.0",
     "transformers==4.57.3",
 ]

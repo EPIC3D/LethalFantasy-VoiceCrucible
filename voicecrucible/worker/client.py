@@ -241,7 +241,7 @@ class WorkerClient:
                 job = self._job
                 status, answer = self._post("/api/heartbeat", {
                     "gpus": gpu.query(), "busy_lines": self._busy_lines, "job_id": job.job_id if job else "",
-                    "progress": self.runner.progress if self._busy_lines else {}, "session": self._session,
+                    "progress": self.runner.progress_snapshot() if self._busy_lines else {}, "session": self._session,
                     "features": ["stop", "shutdown"],  # what the watcher may offer for this worker
                     "version": __version__, "protocol": protocol.PROTOCOL_VERSION,
                     "accepts_updates": self.cfg.worker.allow_update_requests, "update_status": self._update_status})
@@ -310,6 +310,9 @@ def run(cfg: Config) -> int:
         _log.error("%s", e)
         return 1
     _log.info("worker '%s' started – press Ctrl+C to stop", client.ident.name)
+    from voicecrucible.installer import setupstate
+    if why := setupstate.needed():
+        _log.warning("%s – close this window and run setup.cmd on this PC (it adds the missing packages)", why)
     reason, code = "closed", 0
     try:
         client.run()

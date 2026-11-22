@@ -105,14 +105,22 @@ def _page_number(key: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-def join_pages(output_root: Path, language: str, cfg: StoryConfig, lines: list[Line]) -> tuple[list[str], dict]:
-    """Join the rendered parts of every page into STORY/<page>.ogg; returns (joined pages, {page: missing parts})."""
+def join_pages(output_root: Path, language: str, cfg: StoryConfig, lines: list[Line],
+               replace: bool = False) -> tuple[list[str], dict]:
+    """Join the rendered parts of every page into STORY/<page>.ogg; returns (joined pages, {page: missing parts}).
+
+    A page file that already exists (perhaps edited by hand) is kept; with `replace` it is replaced and the old one
+    is kept as <page>.bak.ogg.
+    """
     parts_dir = output_root / "voices" / language / PARTS_FOLDER
     by_page: dict[str, list[Line]] = {}
     for ln in lines:
         by_page.setdefault(ln.key.rsplit("__p", 1)[0], []).append(ln)
     joined, missing = [], {}
     for page, page_lines in by_page.items():
+        target = output_root / "voices" / language / cfg.folder / f"{page}.ogg"
+        if target.exists() and not replace:
+            continue
         files = [parts_dir / f"{ln.key}.ogg" for ln in page_lines]
         absent = [f.stem for f in files if not f.exists()]
         if absent:
@@ -129,8 +137,9 @@ def join_pages(output_root: Path, language: str, cfg: StoryConfig, lines: list[L
                 pieces.append(np.zeros(int(rate * gap), np.float32))
             pieces.append(y)
             previous = ln.emotion
-        target = output_root / "voices" / language / cfg.folder / f"{page}.ogg"
         target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            target.replace(target.with_name(f"{page}.bak.ogg"))
         target.write_bytes(audio.encode(np.concatenate(pieces), rate, "ogg"))
         joined.append(page)
     return joined, missing

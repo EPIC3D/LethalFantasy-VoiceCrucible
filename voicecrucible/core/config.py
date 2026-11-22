@@ -92,6 +92,7 @@ class Config:
     render: RenderConfig = field(default_factory=RenderConfig)
     checks: ChecksConfig = field(default_factory=ChecksConfig)
     base_dir: Path = field(default_factory=Path.cwd)
+    source: Path | None = None  # the config file it was read from (passed on to commands the watcher starts)
 
     def path(self, value: str) -> Path:
         """Resolve a path from the config against the config file's folder."""
@@ -127,6 +128,11 @@ def validate(cfg: Config) -> None:
         raise ConfigError(f"[director] mode must be one of {sorted(_DIRECTOR_MODES)}")
     if cfg.director.mode == "file" and not cfg.director.file:
         raise ConfigError("[director] mode = 'file' needs 'file' to be set")
+    for name in ("output_dir", "work_dir"):
+        if any(part.lower() == "bepinex" for part in cfg.path(getattr(cfg.paths, name)).parts):
+            raise ConfigError(f"[paths] {name} must not be inside the game's BepInEx folder – Voice Crucible never writes "
+                              f"into the game, so finished voices there cannot be overwritten by accident. Keep the "
+                              f"default (output) and copy the voices folder into the game yourself.")
     c = cfg.coordinator
     for name, port in (("port", c.port), ("discovery_port", c.discovery_port), ("watcher_port", c.watcher_port)):
         if not 1024 <= port <= 65535:
@@ -153,6 +159,7 @@ def load(path: Path | None) -> Config:
     with open(path, "rb") as f:
         data = tomllib.load(f)
     cfg.base_dir = path.resolve().parent
+    cfg.source = path.resolve()
     for name, value in data.items():
         section = getattr(cfg, name, None)
         if not is_dataclass(section) or not isinstance(value, dict):

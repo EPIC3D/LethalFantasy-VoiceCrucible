@@ -129,7 +129,11 @@ def story(cfg: Config, args: argparse.Namespace) -> int:
         return 1
     output_root, lang = cfg.path(cfg.paths.output_dir), cfg.render.language
     if args.join:
-        joined, missing = story_mod.join_pages(output_root, lang, scfg, parts)
+        joined, missing = story_mod.join_pages(output_root, lang, scfg, parts, replace=args.all)
+        kept = len({ln.key.rsplit("__p", 1)[0] for ln in parts}) - len(joined) - len(missing)
+        if kept:
+            _log.info("%d page(s) already exist and were kept (maybe edited by hand) – --all replaces them, "
+                      "the old files are kept as .bak.ogg", kept)
         for page, absent in sorted(missing.items()):
             _log.warning("%s not ready – %d part(s) missing", page, len(absent))
         _log.info("%d page(s) written to %s", len(joined), output_root / "voices" / lang / scfg.folder)

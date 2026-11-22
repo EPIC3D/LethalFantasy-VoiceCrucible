@@ -49,6 +49,12 @@ def test_join_pages_waits_for_all_parts(tmp_path):
     joined, missing = story.join_pages(tmp_path, "en", CFG, parts)
     y, sr = audio.decode((tmp_path / "voices" / "en" / "STORY" / "PAGE_1.ogg").read_bytes())
     assert joined == ["PAGE_1"] and abs(len(y) / sr - (2 + story.PAUSE_SWITCH)) < 0.1
+    page = tmp_path / "voices" / "en" / "STORY" / "PAGE_1.ogg"
+    page.write_bytes(b"edited by hand")
+    assert story.join_pages(tmp_path, "en", CFG, parts) == ([], {})  # an existing page is kept
+    assert page.read_bytes() == b"edited by hand"
+    assert story.join_pages(tmp_path, "en", CFG, parts, replace=True)[0] == ["PAGE_1"]
+    assert page.with_name("PAGE_1.bak.ogg").read_bytes() == b"edited by hand" and page.read_bytes() != b"edited by hand"
 
 
 def test_long_ogg_does_not_crash():
@@ -101,3 +107,107 @@ def test_runner_stops_between_lines_and_reports_progress():
 
     results = runner.render(job, cancel=cancel)
     assert [t.uid for t in results] == [0, 1] and runner.progress["done"] == 2 and runner.progress["lines"] == 5
+
+
+
+def test_watcher_refuses_foreign_host_header():
+    from voicecrucible.watcher.server import is_local_host
+    assert is_local_host("127.0.0.1:5132", 5132) and is_local_host("LOCALHOST:5132", 5132)
+    assert not is_local_host("evil.example:5132", 5132) and not is_local_host(None, 5132)
+    assert not is_local_host("127.0.0.1:80", 5132)
+
+
+def test_watcher_form_becomes_safe_crucible_arguments(tmp_path):
+    import pytest
+
+    from voicecrucible.watcher.tasks import TaskError, build_args
+    export = tmp_path / "LFTTS-export"
+    export.mkdir()
+    engines = ["chatterbox", "qwen"]
+    with pytest.raises(TaskError, match="english_lines"):
+        build_args({"action": "render", "lines": str(export)}, engines)
+    (export / "english_lines.jsonl").write_text("")
+    args = build_args({"action": "dry-run", "lines": str(export), "engine": "qwen", "only": "AKIPO_", "limit": 5,
+                       "all": True}, engines)
+    assert args == ["render", "--lines", str(export.resolve()), "--engine", "qwen", "--only", "AKIPO_",
+                    "--limit", "5", "--all", "--dry-run"]
+    assert build_args({"action": "story-join", "lines": str(export)}, engines)[-1] == "--join"
+    assert build_args({"action": "retry-failed"}, engines) == ["render", "--retry-failed"]
+    for bad in ({"action": "render", "lines": str(export), "engine": "evil"},
+                {"action": "render", "lines": str(export), "only": "A --all"},
+                {"action": "render", "lines": str(export), "limit": -1},
+                {"action": "setup"}, {"action": "render", "lines": str(tmp_path / "nope")}):
+        with pytest.raises(TaskError):
+            build_args(bad, engines)
+
+
+def test_watcher_profiles_select_copy_and_refuse_unknown(tmp_path):
+    import shutil
+    from types import SimpleNamespace
+
+    import pytest
+
+    from voicecrucible.core.config import Config
+    from voicecrucible.watcher.server import Controls
+    from voicecrucible.watcher.tasks import TaskError
+    repo = Path(__file__).parents[1] / "profiles"
+    for name in ("template", "lethalfantasy"):
+        shutil.copytree(repo / name, tmp_path / "profiles" / name)
+    cfg = Config(base_dir=tmp_path)
+    state = SimpleNamespace(profile="lethalfantasy", check_settings={})
+    c = Controls(cfg, 5130, tmp_path / "profiles" / "lethalfantasy", root=tmp_path)
+    names = {p["name"]: p for p in c.status()["profiles"]}
+    assert names["lethalfantasy"]["bundled"] and names["lethalfantasy"]["missing"] == 0
+    c.action("/api/profile-new", {"name": "mine", "source": "lethalfantasy"}, state)
+    assert state.profile == "mine" and c.status()["profile"] == "mine" and not c.status()["bundled"]
+    assert c.memory.load()["profile"] == "mine"  # remembered for the next start
+    again = Controls(cfg, 5130, tmp_path / "profiles" / "lethalfantasy", root=tmp_path)
+    assert again.profile_folder.name == "mine"
+    for bad in ({"name": "../../x"}, {"name": "nope"}):
+        with pytest.raises(TaskError):
+            c.action("/api/profile-select", bad, state)
+    with pytest.raises(TaskError):
+        c.action("/api/profile-import", {"file": str(tmp_path / "x.txt")}, state)
+
+
+def test_loading_phase_and_model_folder_size_reach_the_watcher():
+    r = WorkerRegistry(4)
+    r.seen("w1", "PC", "127.0.0.1", [], 0, progress={"engine": "chatterbox", "lines": 16, "done": 0,
+                                                            "phase": "loading", "models_gb": 2.13, "evil": "x"})
+    p = r.snapshot()[0]["progress"]
+    assert p["phase"] == "loading" and p["models_gb"] == 2.13 and "evil" not in p
+
+
+def test_rendering_again_keeps_the_previous_file(tmp_path):
+    from voicecrucible.coordinator import results
+    line = Line(key="AKIPO_X", character="AKIPO", text="hi")
+    first = results.save(tmp_path, "en", line, "ogg", b"edited by hand")
+    results.save(tmp_path, "en", line, "ogg", b"new take")
+    assert first.read_bytes() == b"new take" and first.with_name("AKIPO_X.bak.ogg").read_bytes() == b"edited by hand"
+
+
+def test_output_folder_inside_the_game_is_refused(tmp_path):
+    import pytest
+
+    from voicecrucible.core import config
+    f = tmp_path / "voicecrucible.toml"
+    f.write_text('[paths]\noutput_dir = "D:/Games/LethalFantasy/BepInEx/plugins/LethalFantasyTTS"\n')
+    with pytest.raises(config.ConfigError, match="BepInEx"):
+        config.load(f)
+    f.write_text('[paths]\noutput_dir = "output"\n')
+    config.load(f)
+
+
+def test_render_clock_is_kept_in_the_queue(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite")
+    assert q.run_times() == (None, None)
+    q.add("test", [Line(key=f"K{i}", character="C", text="t") for i in range(2)])
+    start, end = q.run_times()
+    assert start and end is None
+    job = q.claim("w", 5)
+    for ln in job.lines:
+        q.finish(job.job_id, ln.uid, True)
+    q.close()
+    s2, e2 = JobQueue(tmp_path / "q.sqlite").run_times()  # survives a restart
+    assert s2 == start and e2 is not None and e2 >= start

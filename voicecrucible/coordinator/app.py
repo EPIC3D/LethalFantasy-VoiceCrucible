@@ -9,7 +9,8 @@ from __future__ import annotations
 import base64
 import binascii
 import json
-from dataclasses import dataclass
+import threading
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -41,6 +42,7 @@ class CoordinatorState:
     takes_dir: Path  # failed takes kept as fallback candidates
     log_dir: Path | None = None  # shown in the watcher
     profile: str = ""  # active profile name, shown in the watcher
+    stop_event: threading.Event = field(default_factory=threading.Event)  # set to end the coordinator (watcher: run setup)
 
 
 class ApiError(Exception):

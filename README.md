@@ -43,10 +43,13 @@ a wrong name are caught and rendered again.*
    download and asks first.
 2. Nothing to prepare for the voices: the bundled **`lethalfantasy` profile** has the demo voices of the
    LethalFantasy TTS plugin. Want your own? [docs/PROFILES.md](docs/PROFILES.md).
-3. Export the game's lines with the plugin (`[Developer] ExportLines = true`, start the game once).
-4. Run `coordinator.cmd`, then once `pair.cmd` (code from the coordinator), then `worker.cmd`.
-5. `crucible.cmd render --lines "<game>\BepInEx\LethalFantasyTTS"` – watch it with `watcher.cmd`.
-6. The pack is in `output\voices\`; `crucible.cmd report` lists lines with problems.
+3. Export the game's lines with the plugin (`[Developer] ExportLines = true`, play until the first dialogue
+   line appears).
+4. Run `coordinator.cmd` and `watcher.cmd`. In the watcher: **Pair and start worker on this PC**, choose the
+   export folder (`<game>\BepInEx\LFTTS-export`) and **Start rendering**.
+5. The pack is in `output\voices\`; **Report** lists lines with problems.
+
+Everything also works on the command line: `crucible.cmd render --lines ...` (see docs/INSTALL.md).
 
 Step by step: [docs/INSTALL.md](docs/INSTALL.md) · more PCs: [docs/WORKERS.md](docs/WORKERS.md) ·
 settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/PROFILES.md) · problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · **FAQ: [docs/FAQ.md](docs/FAQ.md)**
@@ -62,6 +65,13 @@ settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/
 
 A PC without a supported GPU can still run the coordinator. AMD and Intel GPUs are not supported (yet).
 Details and measured speeds: [docs/GPU.md](docs/GPU.md).
+
+**Ad blockers, network filters, firewalls, antivirus:** programs that filter network traffic on your PC (e.g.
+AdGuard, some antivirus "web protection") can cut off connections to the watcher (`http://127.0.0.1:5132`) or
+between workers and the coordinator (ports 5130/5131 on the local network) – the watcher then shows
+"not reachable" or workers go offline at random. Allow `127.0.0.1`, the Voice Crucible folder's `python.exe`
+and the local network ports in that program, or pause it to test. Windows Firewall asks once on the
+coordinator PC – allow it for private networks.
 
 ## What you see running
 

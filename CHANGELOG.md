@@ -2,6 +2,29 @@
 
 ## 0.1.0b6 – unreleased
 
+- **Watcher as the main window:** a **Render** panel (line export folder with *Browse…*, engine, "only keys
+  starting with", line limit, render again, texts file for other languages) with *Check (dry run)*, *Start
+  rendering*, *Retry failed lines*, *Report* and the audiobook buttons; the command's output is shown live and the
+  last form values are remembered. **Start worker on this PC** (pairs this computer automatically the first time,
+  opens the worker in its own window). **Voices** panel: listen to every character's reference clip and replace it
+  from a file (own profiles; the bundled one is protected). Every button runs the same `crucible.cmd` command – the
+  command line stays fully usable. Remote workers are still started on their own PC (no background service).
+- **Profiles panel:** every installed profile (version, characters, missing voices); **Use** switches the active
+  profile without editing voicecrucible.toml or restarting (remembered for the next start); **Make my own copy**;
+  **Import profile…** (a profile pack zip, backup of an older version first); **Open folder** for editing the files.
+  New: `crucible render|story --profile <name>` uses another profile for one run.
+- Security: the watcher refuses requests with a foreign `Host` header (DNS rebinding).
+- **"Setup needed" in the watcher:** setup remembers which package list it installed; when a new version needs
+  packages that are not installed yet (e.g. after unzipping it by hand), the watcher shows a banner with **Run setup**
+  – it closes this computer's worker and the coordinator (setup replaces files they use) and opens setup in its own
+  window; when setup is done it starts the coordinator again and the page reloads by itself. A worker started
+  with missing packages says so too.
+- Watcher Progress: runtime of the render (kept across coordinator restarts) and the speed of all workers together
+  (lines/min).
+- Watcher: while a worker loads a model it shows "loading the model…" and the growing size of the model folder
+  (the first time the model is downloaded, several GB) instead of "0 / 16 lines".
+- Faster first model download: `hf_xet` (Hugging Face's downloader) is installed with Chatterbox and Qwen – it was
+  skipped on Windows because of a platform-name check in huggingface-hub. Run `setup.cmd` again to get it.
 - **Watcher:** Pause/Resume rendering; per worker Stop (standby), Resume and Shutdown – each asks first and is only
   offered to workers that support it; "Unpair" moved to the pairing panel; current batch per worker (engine,
   lines done, current line); Output panel (pack folder, files per character, report, logs); says whether a
@@ -10,11 +33,17 @@
 - **Memory Orb audiobook (story mode):** `crucible story --lines <export>` renders the pages (narrator, the
   Twins' coloured lines in their own voices), `--join` builds `voices/<language>/STORY/<page>.ogg`. The default
   profile has a narrator voice.
+- **Your edits are not overwritten:** joining audiobook pages keeps a page file that already exists (`--all` /
+  "Render again" replaces it); rendering a line again keeps the previous file. The old file is kept as
+  `<name>.bak.ogg` in both cases. Voice Crucible never writes into the game: an `output_dir` or `work_dir` inside
+  the game's `BepInEx` folder is refused, so the voices the plugin uses can only be replaced by copying them yourself.
 - Fix: writing long OGG files crashed the program (libsndfile) – written in blocks now.
 - Fix: a worker restarted after "Shutdown" works again right away.
 - Security: Pillow 13 (all critical Dependabot warnings), diffusers 0.38; Seed-VC installs fewer packages
   (no gradio, fastapi, starlette, modelscope, ...) and uses transformers 4.57.3. Remaining warnings are
   explained in docs/SECURITY.md.
+- Docs: the plugin's line export is in `<game>\BepInEx\LFTTS-export\` from plugin 0.5.1 on (was
+  `BepInEx\LethalFantasyTTS\`) and is written when the first dialogue line appears, not at the main menu.
 - Window titles for the launchers ("Voice Crucible - worker", ...); `.cmd` files always with Windows line ends.
 
 ## 0.1.0b5 – 2026-11-21

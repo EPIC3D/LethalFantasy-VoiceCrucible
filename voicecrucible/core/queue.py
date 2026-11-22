@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS lines (
     UNIQUE (key, character, variant, engine)
 );
 CREATE INDEX IF NOT EXISTS idx_lines_status ON lines (status);
+CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v REAL);
 """
 _ADDED_COLUMNS = {"best_take": "TEXT NOT NULL DEFAULT ''", "best_score": "REAL NOT NULL DEFAULT -1"}
 
@@ -68,10 +69,13 @@ class JobQueue:
         rows = [(ln.key, ln.character, ln.variant, ln.text, ln.emotion, ln.direction, ln.voice, json.dumps(ln.params),
                  engine) for ln in lines]
         with self._lock:
-            before = self._count_locked()
+            before, idle = self._count_locked(), self._remaining_locked() == 0
             self._db.executemany("INSERT OR IGNORE INTO lines (key, character, variant, text, emotion, direction, voice,"
                                  " params, engine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
-            return self._count_locked() - before
+            added = self._count_locked() - before
+            if added and idle:
+                self._new_run_locked()
+            return added
 
     def claim(self, worker: str, max_lines: int) -> Job | None:
         """Lease up to `max_lines` pending lines of one engine to a worker; None when nothing is pending."""
@@ -119,6 +123,7 @@ class JobQueue:
                                     (uid, lease_id)).fetchone()
             if held is None:
                 return None
+            self._set_meta_locked("last_finish", time.time())
             if passed:
                 self._db.execute("UPDATE lines SET status = 'done', output = ?, reason = '', lease_id = NULL,"
                                  " lease_until = NULL WHERE uid = ?", (output, uid))
@@ -131,9 +136,35 @@ class JobQueue:
     def retry_failed(self) -> int:
         """Put every line that failed for good back into the queue with fresh attempts. Returns how many."""
         with self._lock:
+            idle = self._remaining_locked() == 0
             cur = self._db.execute("UPDATE lines SET status = 'pending', attempts = 0, reason = '', output = '',"
                                    " best_take = '', best_score = -1 WHERE status = 'failed'")
+            if cur.rowcount and idle:
+                self._new_run_locked()
             return cur.rowcount
+
+    def run_times(self) -> tuple[float | None, float | None]:
+        """(start, end) of the current render: lines added to an empty queue start it; end = last result once
+        nothing is waiting or rendering any more (None while it runs). Kept in the queue file, so it survives restarts."""
+        with self._lock:
+            meta = dict(self._db.execute("SELECT k, v FROM meta").fetchall())
+            start = meta.get("run_start")
+            if start is None:
+                return None, None
+            if self._remaining_locked():
+                return start, None
+            last = meta.get("last_finish")
+            return start, last if last is not None and last >= start else start
+
+    def _remaining_locked(self) -> int:
+        return self._db.execute("SELECT COUNT(*) FROM lines WHERE status IN ('pending', 'leased')").fetchone()[0]
+
+    def _set_meta_locked(self, key: str, value: float) -> None:
+        self._db.execute("INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)", (key, value))
+
+    def _new_run_locked(self) -> None:
+        self._set_meta_locked("run_start", time.time())
+        self._db.execute("DELETE FROM meta WHERE k = 'last_finish'")
 
     def best_take(self, uid: int) -> str:
         """Stored file of the best failed take of a line ('' if none)."""

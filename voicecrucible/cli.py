@@ -60,11 +60,14 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--all", action="store_true", help="also lines that already have a voice file (render them again)")
     r.add_argument("--retry-failed", action="store_true", help="queue the lines that failed for good again")
     r.add_argument("--test", type=int, metavar="N", help="queue N test lines (beep engine, no model needed)")
+    r.add_argument("--profile", default="", help="profile to use instead of [render] profile")
     st = cmds["story"]
     st.add_argument("--lines", type=Path, required=True, help="folder with the plugin's line export")
     st.add_argument("--texts", type=Path, help="page texts in another language (default: the export's English)")
     st.add_argument("--join", action="store_true", help="join the rendered parts into STORY/<page>.ogg")
-    st.add_argument("--all", action="store_true", help="also parts that are already rendered")
+    st.add_argument("--all", action="store_true", help="also parts that are already rendered; with --join: replace "
+                    "existing pages (old ones kept as .bak.ogg)")
+    st.add_argument("--profile", default="", help="profile to use instead of [render] profile")
     s = cmds["setup"]
     s.add_argument("--components", default="", help="comma-separated, e.g. checks,chatterbox,qwen,seedvc "
                    "(default: asked; see downloads.toml)")
@@ -87,6 +90,9 @@ def _find_config(arg: Path | None) -> Path | None:
     """Use the given config file, else voicecrucible.toml in the current folder, else in the install folder."""
     if arg is not None:
         return arg
+    import os
+    if os.environ.get("VOICECRUCIBLE_CONFIG"):  # set by the watcher for the local worker it starts
+        return Path(os.environ["VOICECRUCIBLE_CONFIG"])
     from voicecrucible.installer import layout
     for candidate in (Path("voicecrucible.toml"), layout.ROOT / "voicecrucible.toml"):
         if candidate.exists():
@@ -107,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg = config_mod.load(config_file)
         if config_file is None:  # no settings file: folders are relative to the install folder, not the current one
             cfg.base_dir = layout.ROOT
+        if getattr(args, "profile", ""):  # render/story --profile: this run only, the config file is not changed
+            cfg.render.profile = args.profile
     except (OSError, config_mod.ConfigError) as e:
         print(f"Config error: {e}", file=sys.stderr)
         return 2

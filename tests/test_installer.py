@@ -179,3 +179,15 @@ def test_profile_pack_install_update_and_backup(tmp_path):
         z.writestr("x/readme.txt", "no profile")
     with pytest.raises(profiles.ProfileError, match="missing"):
         profiles.install(bad, tmp_path)
+
+
+def test_setup_state_tells_when_setup_must_run_again(tmp_path):
+    from voicecrucible.installer import setupstate
+    (tmp_path / "uv.lock").write_text("v1")
+    assert setupstate.needed(tmp_path) == ""  # not an installed copy (no runtime\venv)
+    (tmp_path / "runtime" / "venv").mkdir(parents=True)
+    assert "not been run" in setupstate.needed(tmp_path)
+    setupstate.record(tmp_path)
+    assert setupstate.needed(tmp_path) == ""
+    (tmp_path / "uv.lock").write_text("v2")  # a new version unzipped by hand
+    assert "needs packages" in setupstate.needed(tmp_path)

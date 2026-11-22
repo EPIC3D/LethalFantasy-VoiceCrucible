@@ -240,6 +240,9 @@ def resync_components(root: Path = layout.ROOT) -> None:
         code = str(e)
     if code != 0:
         _log.warning("could not update the installed components (%s) – run setup.cmd once", code)
+    else:
+        from voicecrucible.installer import setupstate
+        setupstate.record(root)
 
 
 def outdated_workers(watcher_port: int, target: str) -> list[str]:

@@ -24,3 +24,15 @@ removed) into `logs\diagnose.txt`. Logs of every command are in `logs\`.
 | Update: "no signed program zip" / HTTP 404 | No signed release available yet; update by hand from GitHub. |
 
 Still stuck? Open an issue on GitHub and paste `logs\diagnose.txt` (see the README, "Reporting bugs").
+
+## Watcher "not reachable", workers go offline at random, connections reset
+
+Programs that filter network traffic on your PC – ad blockers such as AdGuard, antivirus "web protection",
+VPN or firewall tools – can cut off connections to `http://127.0.0.1:5132` (watcher) or between workers and the
+coordinator (ports 5130 TCP and 5131 UDP on the local network). Typical signs: the watcher page shows
+"Coordinator not reachable" for a moment, a worker shows "no contact since …", or a log says
+"connection reset" / "WinError 10054".
+
+- Allow `127.0.0.1`, the Voice Crucible folder (its `runtime\venv\Scripts\python.exe`) and the local network
+  ports in that program, or pause it briefly to check whether it is the cause.
+- Windows Firewall asks once when the coordinator starts: allow it for **private** networks.

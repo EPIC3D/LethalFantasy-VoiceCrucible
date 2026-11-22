@@ -20,11 +20,32 @@
   button { background:var(--accent); color:#1a1024; border:0; border-radius:6px; padding:6px 12px; font-weight:600; cursor:pointer; }
   button.small { background:transparent; color:var(--bad); border:1px solid var(--bad); padding:2px 8px; font-weight:400; }
   .code { font:600 22px ui-monospace, monospace; letter-spacing:2px; margin:6px 0; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); font-weight:500; }
+  button:disabled { opacity:.45; cursor:default; }
+  .form { display:grid; grid-template-columns:max-content 1fr; gap:8px 12px; align-items:center; max-width:900px; }
+  .form label { color:var(--muted); }
+  .row { display:flex; gap:6px; min-width:0; } .row input[type=text] { flex:1; min-width:0; }
+  input, select { background:#0003; color:var(--text); border:1px solid #fff2; border-radius:6px; padding:5px 8px; font:inherit; }
+  input[type=number] { width:90px; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  pre.log { background:#0004; border-radius:6px; padding:8px; max-height:260px; overflow:auto; font:12px/1.4 ui-monospace, monospace; white-space:pre-wrap; margin:8px 0 0; }
+  .err { color:var(--bad); margin-top:8px; }
+  details summary { cursor:pointer; color:var(--muted); margin-top:8px; }
+  @media (max-width:600px) { .form { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <h1>Voice Crucible</h1>
 <div class="sub" id="ident">connecting…</div>
+
+<div class="panel" id="setup-banner" hidden style="border:1px solid var(--warn)">
+  <h2 style="color:var(--warn)">Setup needed</h2>
+  <div id="setup-why"></div>
+  <div class="sub" style="margin:6px 0 10px">Setup adds the missing packages to the components you already have (nothing
+    is removed without asking). The coordinator and this computer's worker close for it; the coordinator
+    starts again by itself when setup is done. Remote workers: run <code>setup.cmd</code> on those PCs.</div>
+  <button onclick="runSetup()">Run setup</button>
+</div>
 
 <div class="panel">
   <h2>Progress</h2>
@@ -32,21 +53,16 @@
   <div class="stats" id="stats"></div>
 </div>
 
+
 <div class="panel">
   <h2>Workers</h2>
   <table><thead><tr><th>Name</th><th>State</th><th>Current batch</th><th>GPU</th><th>VRAM</th><th>Load</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
   <tbody id="workers"></tbody></table>
-  <p><button id="pause" onclick="togglePause()">Pause rendering</button> <button onclick="requestUpdate()">Update workers</button></p>
+  <p><button id="pause" onclick="togglePause()">Pause rendering</button> <button onclick="requestUpdate()">Update workers</button>
+    <button class="ghost" id="local-worker" hidden onclick="startLocalWorker()">Start worker on this PC</button></p>
   <div class="sub">Asks every online worker that allows it (<code>allow_update_requests = true</code>) to update itself
     from GitHub; each worker checks the signature itself. Update the workers first and this coordinator last
     (<code>crucible update</code> on this computer).</div>
-</div>
-
-<div class="panel">
-  <h2>Output</h2>
-  <div id="output" class="sub"></div>
-  <table><thead><tr><th>Folder</th><th>Files</th><th>Path</th></tr></thead>
-  <tbody id="folders"></tbody></table>
 </div>
 
 <div class="panel">
@@ -56,6 +72,70 @@
   <div class="sub">On the worker machine run <code>pair.cmd</code> and type the code. It works once and expires after 10 minutes.</div>
   <table><thead><tr><th>Paired workers</th><th></th></tr></thead><tbody id="paired"></tbody></table>
 </div>
+
+<div class="panel" id="profiles-panel" hidden>
+  <h2>Profiles</h2>
+  <div class="sub">A profile holds the characters, their reference voices, the emotion table and the pronunciation
+    of names. The active profile is used by the buttons above.</div>
+  <table><thead><tr><th>Profile</th><th>Version</th><th>Characters</th><th>Voices</th><th></th></tr></thead>
+  <tbody id="profiles"></tbody></table>
+  <div class="actions">
+    <button class="ghost" onclick="importProfile()">Import profile…</button>
+  </div>
+</div>
+
+<div class="panel" id="voices-panel" hidden>
+  <h2>Voices</h2>
+  <div class="sub" id="voices-note"></div>
+  <table><thead><tr><th>Character</th><th>Pack folder</th><th>Engine</th><th>Reference clip</th><th></th></tr></thead>
+  <tbody id="voices"></tbody></table>
+</div>
+
+<div class="panel" id="controls" hidden>
+  <h2>Render</h2>
+  <div class="form">
+    <label for="f-lines">Line export folder</label>
+    <div class="row"><input type="text" id="f-lines" placeholder="&lt;game&gt;\BepInEx\LFTTS-export">
+      <button class="ghost" onclick="pickInto('f-lines','folder','Line export folder (english_lines.jsonl)')">Browse…</button></div>
+    <label for="f-engine">Engine</label>
+    <select id="f-engine"></select>
+    <label for="f-only">Only keys starting with</label>
+    <input type="text" id="f-only" placeholder="(all) e.g. AKIPO_DIALOGUE_EVENT_HUG">
+    <label for="f-limit">At most</label>
+    <div class="row"><input type="number" id="f-limit" min="0" value="0"> <span class="sub" style="margin:6px 0 0">lines (0 = all)</span></div>
+    <label for="f-all">Render again</label>
+    <div><input type="checkbox" id="f-all"> <span class="sub">also lines that already have a voice file</span></div>
+  </div>
+  <details><summary>Other language (texts file)</summary>
+    <div class="form" style="margin-top:8px">
+      <label for="f-texts">Texts file</label>
+      <div class="row"><input type="text" id="f-texts" placeholder="(English texts from the export)">
+        <button class="ghost" onclick="pickInto('f-texts','file','Texts in the pack language (.jsonl)')">Browse…</button></div>
+    </div>
+    <div class="sub">Set <code>[render] language</code> in voicecrucible.toml to the pack language first.</div>
+  </details>
+  <div class="actions">
+    <button onclick="runTask('dry-run')">Check (dry run)</button>
+    <button onclick="runTask('render')">Start rendering</button>
+    <button class="ghost" onclick="runTask('retry-failed')">Retry failed lines</button>
+    <button class="ghost" onclick="runTask('report')">Report</button>
+    <button class="ghost" onclick="runTask('story')">Audiobook: queue pages</button>
+    <button class="ghost" onclick="runTask('story-join')">Audiobook: join pages</button>
+  </div>
+  <div class="err" id="task-err"></div>
+  <div class="sub" id="task-title" style="margin:8px 0 0"></div>
+  <pre class="log" id="task-out" hidden></pre>
+  <div class="sub">Every button runs the same <code>crucible.cmd</code> command you can also type yourself.</div>
+</div>
+
+<div class="panel">
+  <h2>Output</h2>
+  <div id="output" class="sub"></div>
+  <table><thead><tr><th>Folder</th><th>Files</th><th>Path</th></tr></thead>
+  <tbody id="folders"></tbody></table>
+</div>
+
+
 
 <div class="panel">
   <h2>Problems</h2>
@@ -78,7 +158,9 @@ async function refresh() {
     document.getElementById("stats").innerHTML =
       `<span>Done <b class="on">${c.done}</b></span><span>Rendering <b>${c.leased}</b></span>` +
       `<span>Waiting <b>${c.pending}</b></span><span>Failed <b class="bad">${c.failed}</b></span>` +
-      `<span>Time left <b>${dur(st.eta_seconds)}</b></span>`;
+      `<span>Time left <b>${dur(st.eta_seconds)}</b></span>` +
+      `<span>Runtime <b>${dur(st.elapsed_seconds)}</b></span>` +
+      `<span><b>${st.lines_per_min ?? 0}</b> lines/min</span>`;
     document.getElementById("workers").innerHTML = st.workers.map(w => {
       const g = (w.gpus || [])[0] || {};
       const vram = g.memory_total_mb ? `${(g.memory_used_mb/1024).toFixed(1)} / ${(g.memory_total_mb/1024).toFixed(1)} GB` : "–";
@@ -91,8 +173,11 @@ async function refresh() {
                            : `<button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="setMode(this, 'stop')">Stop</button>`) +
         ` <button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="setMode(this, 'shutdown')">Shutdown</button>`;
       const pr = w.progress || {};
-      const batch = w.online && pr.lines ? `${esc(pr.engine)} · ${pr.done} / ${pr.lines} lines` +
-        `<br><span class="sub">${esc(pr.current)}</span>` : "–";
+      const loading = pr.phase === "loading";
+      const batch = !(w.online && pr.lines) ? "–" : loading
+        ? `${esc(pr.engine)} · <span class="retry">loading the model…</span><br><span class="sub">` +
+          `the first time it is downloaded (several GB) – model folder ${pr.models_gb != null ? pr.models_gb.toFixed(1) + " GB" : "…"}</span>`
+        : `${esc(pr.engine)} · ${pr.done} / ${pr.lines} lines<br><span class="sub">${esc(pr.current)}</span>`;
       const why = w.online || !w.last_contact ? "" : `<br><span class="sub">${w.exit_reason
         ? esc(w.exit_reason) + " · " + esc(w.last_contact)
         : "no contact since " + esc(w.last_contact) + " – window closed or network problem"}</span>`;
@@ -158,6 +243,144 @@ async function unpair(btn) {
   await fetch("/api/revoke", {method: "POST", headers: H, body: JSON.stringify({worker_id: id})}); refresh();
 }
 refresh(); setInterval(refresh, 3000);
+
+// ---- controls: render form, local worker, voices (only when the coordinator offers them) ----
+let formLoaded = false;
+const $ = id => document.getElementById(id);
+async function refreshControls() {
+  let c;
+  try { const r = await fetch("/api/control"); if (!r.ok) return; c = await r.json(); } catch (e) { return; }
+  $("controls").hidden = false; $("voices-panel").hidden = false; $("profiles-panel").hidden = false;
+  renderProfiles(c);
+  $("setup-banner").hidden = !c.setup_needed;
+  $("setup-why").textContent = c.setup_needed ? c.setup_needed.charAt(0).toUpperCase() + c.setup_needed.slice(1) + "." : "";
+  if (!formLoaded) {
+    formLoaded = true;
+    const f = c.form || {};
+    $("f-engine").innerHTML = c.engines.filter(e => e !== "test").map(e =>
+      `<option ${e === (f.engine || c.default_engine) ? "selected" : ""}>${esc(e)}</option>`).join("");
+    $("f-lines").value = f.lines || ""; $("f-texts").value = f.texts || "";
+    $("f-only").value = f.only || ""; $("f-limit").value = f.limit || 0;
+  }
+  const t = c.task;
+  document.querySelectorAll("#controls .actions button").forEach(b => b.disabled = t.running);
+  $("task-title").innerHTML = t.title ? `<b>${esc(t.title)}</b> · ` + (t.running ? "running…"
+    : t.exit_code === 0 ? `<span class="on">finished</span>` : `<span class="bad">ended with an error (${esc(t.exit_code)})</span>`) : "";
+  const out = $("task-out");
+  if (t.output.length) {
+    const atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 20;
+    out.hidden = false; out.textContent = t.output.join("\n");
+    if (atEnd) out.scrollTop = out.scrollHeight;
+  }
+  const lw = c.local_worker, b = $("local-worker");
+  b.hidden = lw.running;
+  b.textContent = lw.paired ? "Start worker on this PC" : "Pair and start worker on this PC";
+  $("voices-note").innerHTML = `Profile <b>${esc(c.profile)}</b>. ` + (c.bundled
+    ? `This is a bundled profile – program updates replace it, so its clips cannot be changed here. For your own voices make a copy: <code>crucible.cmd profile new mine --from lethalfantasy</code>, set <code>[render] profile = "mine"</code> in voicecrucible.toml and restart the coordinator.`
+    : `Use 5–30 s of clean speech of one voice, no music. The old clip is kept as <code>.bak.wav</code>.`)
+    + (c.voices_error ? `<div class="err">${esc(c.voices_error)}</div>` : "");
+  const playing = [...document.querySelectorAll("#voices audio")].some(a => !a.paused);
+  if (playing) return; // do not cut off a clip that is being listened to
+  $("voices").innerHTML = c.voices.map(v => {
+    const q = `character=${encodeURIComponent(v.character)}&engine=${encodeURIComponent(v.engine)}`;
+    return `<tr><td>${esc(v.character)}</td><td>${esc(v.folder)}</td><td>${esc(v.engine)}</td>` +
+      `<td>${v.exists ? `<audio controls preload="none" src="/api/voice?${q}" style="height:28px;vertical-align:middle"></audio> <span class="sub">${esc(v.seconds ?? "?")} s</span>`
+                      : `<span class="bad">missing</span> <span class="sub">${esc(v.file)}</span>`}</td>` +
+      `<td>${c.bundled ? "" : `<button class="ghost" data-c="${esc(v.character)}" data-e="${esc(v.engine)}" onclick="replaceVoice(this)">Replace…</button>`}</td></tr>`;
+  }).join("") || `<tr><td colspan="5" class="off">No characters in this profile yet – run "Check (dry run)" once.</td></tr>`;
+}
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: H, body: JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+async function pickInto(id, kind, title) {
+  try { const r = await post("/api/pick", {kind, title, start: $(id).value}); if (r.path) $(id).value = r.path; }
+  catch (e) { $("task-err").textContent = e.message; }
+}
+async function runTask(action) {
+  $("task-err").textContent = "";
+  const form = {action, lines: $("f-lines").value.trim(), texts: $("f-texts").value.trim(), engine: $("f-engine").value,
+                only: $("f-only").value.trim(), limit: Number($("f-limit").value) || 0, all: $("f-all").checked};
+  if (action === "render" && form.all && !confirm("Render again also the lines that already have a voice file?")) return;
+  try { await post("/api/task", {form}); } catch (e) { $("task-err").textContent = e.message; }
+  refreshControls();
+}
+async function startLocalWorker() {
+  $("task-err").textContent = "";
+  try { await post("/api/local-worker"); } catch (e) { alert(e.message); }
+  refreshControls(); refresh();
+}
+async function replaceVoice(btn) {
+  const character = btn.dataset.c, engine = btn.dataset.e;
+  try {
+    const r = await post("/api/pick", {kind: "wav", title: `Reference clip for ${character}`});
+    if (!r.path) return;
+    if (!confirm(`Use ${r.path} as the ${engine} voice of ${character}?`)) return;
+    await post("/api/voice-replace", {character, engine, file: r.path});
+  } catch (e) { alert(e.message); }
+  refreshControls();
+}
+
+function renderProfiles(c) {
+  $("profiles").innerHTML = (c.profiles || []).map(p => {
+    const active = p.name === c.profile;
+    const voices = p.error ? `<span class="bad">${esc(p.error)}</span>`
+      : p.missing ? `<span class="bad">${p.missing} missing</span>` : `<span class="on">complete</span>`;
+    return `<tr><td><b>${esc(p.name)}</b>${active ? ` <span class="on">● active</span>` : ""}` +
+      `${p.bundled ? ` <span class="sub">bundled</span>` : ""}${p.name === c.default_profile ? ` <span class="sub">default</span>` : ""}` +
+      `${p.title && p.title !== p.name ? `<br><span class="sub">${esc(p.title)}</span>` : ""}</td>` +
+      `<td>${esc(p.version)}</td><td>${p.characters}</td><td>${voices}</td><td style="white-space:nowrap">` +
+      (active ? "" : `<button data-n="${esc(p.name)}" onclick="selectProfile(this)">Use</button> `) +
+      `<button class="ghost" data-n="${esc(p.name)}" onclick="copyProfile(this)">Make my own copy</button> ` +
+      `<button class="ghost" data-n="${esc(p.name)}" onclick="openProfile(this)">Open folder</button></td></tr>`;
+  }).join("") || `<tr><td colspan="5" class="off">No profiles found.</td></tr>`;
+}
+async function selectProfile(btn) {
+  try { await post("/api/profile-select", {name: btn.dataset.n}); } catch (e) { alert(e.message); }
+  refreshControls(); refresh();
+}
+async function copyProfile(btn) {
+  const name = prompt(`Name of your copy of "${btn.dataset.n}" (letters, digits, - and _):`, "mine");
+  if (!name) return;
+  try { await post("/api/profile-new", {name: name.trim(), source: btn.dataset.n}); alert(`Profile "${name.trim()}" created and active.`); }
+  catch (e) { alert(e.message); }
+  refreshControls(); refresh();
+}
+async function runSetup() {
+  if (!confirm("Run setup? The coordinator and this computer's worker close, setup opens in its own window. " +
+               "The coordinator starts again by itself when setup is done.")) return;
+  try {
+    await post("/api/run-setup");
+    document.body.innerHTML = `<h1>Voice Crucible</h1><div class="panel"><b>Setup is running in its own window.</b> ` +
+      `The coordinator is closed meanwhile. When setup is done it starts the coordinator again and this page ` +
+      `reloads by itself.<div class="sub" id="wait" style="margin-top:8px">waiting for setup…</div>` +
+      `<div class="sub">If setup stopped with an error, fix it, then start <code>coordinator.cmd</code> yourself.</div></div>`;
+    const t0 = Date.now();
+    await new Promise(r => setTimeout(r, 8000));  // the coordinator needs a moment to close
+    setInterval(async () => {
+      try { const r = await fetch("/api/status"); if (r.ok) location.reload(); } catch (e) { /* still closed */ }
+      const el = document.getElementById("wait");
+      if (el) el.textContent = `waiting for setup… ${Math.round((Date.now() - t0) / 1000)} s`;
+    }, 3000);
+  } catch (e) { alert(e.message); }
+}
+async function openProfile(btn) {
+  try { await post("/api/profile-open", {name: btn.dataset.n}); } catch (e) { alert(e.message); }
+}
+async function importProfile() {
+  try {
+    const r = await post("/api/pick", {kind: "zip", title: "Profile pack (.zip)"});
+    if (!r.path) return;
+    if (!confirm(`Install the profile pack ${r.path}? An installed profile of the same name is backed up first.`)) return;
+    const res = await post("/api/profile-import", {file: r.path});
+    alert(`Profile "${res.profile}" installed.` + (res.backup ? ` Your previous version is kept in ${res.backup}.` : "") +
+          ` Press "Use" to make it active.`);
+  } catch (e) { alert(e.message); }
+  refreshControls();
+}
+refreshControls(); setInterval(refreshControls, 2000);
 </script>
 </body>
 </html>

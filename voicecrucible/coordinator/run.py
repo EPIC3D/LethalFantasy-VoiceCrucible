@@ -65,11 +65,15 @@ def build_state(cfg: Config) -> app.CoordinatorState:
 class RunningCoordinator:
     """The started servers; `stop()` shuts everything down cleanly."""
 
-    def __init__(self, state: app.CoordinatorState, api_port: int, watcher_port: int, discovery_port: int | None):
+    def __init__(self, state: app.CoordinatorState, api_port: int, watcher_port: int, discovery_port: int | None,
+                 cfg: Config | None = None):
         self.state = state
         self.api = app.make_server(state, "0.0.0.0", api_port)
-        self.watcher = watcher_server.make_server(state, watcher_port)
         self.api_port = self.api.server_address[1]
+        controls = watcher_server.Controls(cfg, self.api_port, profile_dir(cfg)) if cfg is not None else None
+        if controls is not None and controls.profile_folder != controls.default_folder:
+            controls.select(controls.profile_folder.name, state)  # the profile last chosen in the watcher
+        self.watcher = watcher_server.make_server(state, watcher_port, controls)
         self.watcher_port = self.watcher.server_address[1]
         self.discovery = None
         if discovery_port is not None:
@@ -99,7 +103,7 @@ def run(cfg: Config) -> int:
     state = build_state(cfg)
     c = cfg.coordinator
     try:
-        running = RunningCoordinator(state, c.port, c.watcher_port, c.discovery_port if c.discovery else None)
+        running = RunningCoordinator(state, c.port, c.watcher_port, c.discovery_port if c.discovery else None, cfg)
     except OSError as e:
         _log.error("cannot open the coordinator ports (%s) – is another coordinator already running?", e)
         return 1
@@ -110,11 +114,12 @@ def run(cfg: Config) -> int:
     _log.info("watcher: http://127.0.0.1:%d  (only on this computer)", running.watcher_port)
     _log.info("pairing code for new workers: %s  (valid 10 minutes, new code in the watcher)", code)
     _log.info("press Ctrl+C to stop")
-    stop = threading.Event()
+    stop = state.stop_event
     try:
         while not stop.wait(30):
             if n := state.queue.expire():
                 _log.warning("%d line(s) of a lost worker went back to the queue", n)
+        _log.info("stopping (requested in the watcher)…")
     except KeyboardInterrupt:
         _log.info("stopping…")
     finally:

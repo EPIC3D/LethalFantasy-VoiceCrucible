@@ -2220,6 +2220,7 @@ chatterbox = [
     { name = "chatterbox-tts" },
     { name = "conformer" },
     { name = "diffusers" },
+    { name = "hf-xet" },
     { name = "librosa" },
     { name = "resemble-perth" },
     { name = "s3tokenizer" },
@@ -2245,6 +2246,7 @@ gpu = [
 ]
 qwen = [
     { name = "accelerate" },
+    { name = "hf-xet" },
     { name = "qwen-tts" },
     { name = "torch" },
     { name = "torchaudio" },
@@ -2258,6 +2260,8 @@ requires-dist = [
     { name = "conformer", marker = "extra == 'chatterbox'", specifier = "==0.3.2" },
     { name = "cryptography", specifier = ">=45" },
     { name = "diffusers", marker = "extra == 'chatterbox'", specifier = "==0.38.0" },
+    { name = "hf-xet", marker = "extra == 'chatterbox'", specifier = "==1.8.0" },
+    { name = "hf-xet", marker = "extra == 'qwen'", specifier = "==1.8.0" },
     { name = "librosa", marker = "extra == 'chatterbox'", specifier = "==0.11.0" },
     { name = "librosa", marker = "extra == 'checks'", specifier = "==0.11.0" },
     { name = "numpy", specifier = ">=1.26" },
