@@ -57,6 +57,7 @@ class JobQueue:
             if name not in have:
                 self._db.execute(f"ALTER TABLE lines ADD COLUMN {name} {definition}")
         self._lock = threading.Lock()
+        self.cancelled_jobs: set[str] = set()  # leases removed by cancel(): their workers are told to stop
         self.lease_seconds = lease_seconds
         self.max_attempts = max_attempts
 
@@ -195,6 +196,16 @@ class JobQueue:
         """Put lines of lost workers (lease ran out) back into the queue. Returns how many."""
         with self._lock:
             return self._expire_locked()
+
+    def cancel(self) -> int:
+        """Remove every line that is waiting or being rendered (a worker's late results for them are ignored).
+        Finished and failed lines – and their voice files – are kept. Returns how many lines were removed."""
+        with self._lock:
+            self.cancelled_jobs |= {r[0] for r in self._db.execute(
+                "SELECT DISTINCT lease_id FROM lines WHERE status = 'leased' AND lease_id IS NOT NULL")}
+            cur = self._db.execute("DELETE FROM lines WHERE status IN ('pending', 'leased')")
+            self._db.execute("DELETE FROM meta WHERE k = 'run_start'")
+            return cur.rowcount
 
     def counts(self) -> dict[str, int]:
         """Number of lines per status."""

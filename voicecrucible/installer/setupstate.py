@@ -15,10 +15,15 @@ from voicecrucible.installer import layout
 
 
 def _lock_hash(root: Path) -> str:
+    """Fingerprint of the third-party packages in uv.lock. Voice Crucible's own entry is left out: its version
+    changes with every release although no package has to be installed for that."""
     try:
-        return hashlib.sha256((root / "uv.lock").read_bytes()).hexdigest()
+        text = (root / "uv.lock").read_text(encoding="utf-8").replace("\r\n", "\n")
     except OSError:
         return ""
+    sep = "\n[[package]]\n"
+    kept = [b for b in text.split(sep) if not b.startswith('name = "voicecrucible"\n')]
+    return hashlib.sha256(sep.join(kept).encode("utf-8")).hexdigest()
 
 
 def _state_file(root: Path) -> Path:
@@ -30,7 +35,7 @@ def record(root: Path = layout.ROOT) -> None:
     try:
         f = _state_file(root)
         f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(json.dumps({"lock_sha256": _lock_hash(root), "version": __version__}, indent=1), encoding="utf-8")
+        f.write_text(json.dumps({"packages_sha256": _lock_hash(root), "version": __version__}, indent=1), encoding="utf-8")
     except OSError:
         pass
 
@@ -44,6 +49,6 @@ def needed(root: Path = layout.ROOT) -> str:
         state = json.loads(_state_file(root).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return "setup has not been run with this version yet"
-    if state.get("lock_sha256") != lock:
+    if state.get("packages_sha256") != lock:
         return f"this version ({__version__}) needs packages that are not installed yet (last setup: {state.get('version', '?')})"
     return ""

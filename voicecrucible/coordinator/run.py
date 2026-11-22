@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -62,6 +63,21 @@ def build_state(cfg: Config) -> app.CoordinatorState:
     )
 
 
+def hold_leftover(state: app.CoordinatorState) -> None:
+    """Lines left from an earlier render do not start rendering on their own: pause, and let the watcher ask
+    (Resume or Cancel render)."""
+    counts = state.queue.counts()
+    waiting = counts["pending"] + counts["leased"]
+    if not waiting:
+        return
+    start, _ = state.queue.run_times()
+    since = time.strftime("%Y-%m-%d %H:%M", time.localtime(start)) if start else ""
+    state.leftover = {"lines": waiting, "since": since}
+    state.registry.paused = True
+    _log.warning("%d line(s) of an unfinished render%s are waiting – rendering is paused; Resume or Cancel render "
+                 "in the watcher (or: crucible render --cancel)", waiting, f" (started {since})" if since else "")
+
+
 class RunningCoordinator:
     """The started servers; `stop()` shuts everything down cleanly."""
 
@@ -107,6 +123,7 @@ def run(cfg: Config) -> int:
     except OSError as e:
         _log.error("cannot open the coordinator ports (%s) – is another coordinator already running?", e)
         return 1
+    hold_leftover(state)
     running.start()
     code = state.pairing.new_code()
     _log.info("coordinator %s running, certificate %s", state.identity.coordinator_id,

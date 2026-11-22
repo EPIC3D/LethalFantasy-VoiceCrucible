@@ -191,3 +191,16 @@ def test_setup_state_tells_when_setup_must_run_again(tmp_path):
     assert setupstate.needed(tmp_path) == ""
     (tmp_path / "uv.lock").write_text("v2")  # a new version unzipped by hand
     assert "needs packages" in setupstate.needed(tmp_path)
+
+
+def test_new_program_version_alone_does_not_ask_for_setup(tmp_path):
+    from voicecrucible.installer import setupstate
+    lock = ('version = 1\n\n[[package]]\nname = "numpy"\nversion = "2.0"\n\n'
+            '[[package]]\nname = "voicecrucible"\nversion = "{v}"\nsource = {{ editable = "." }}\n')
+    (tmp_path / "runtime" / "venv").mkdir(parents=True)
+    (tmp_path / "uv.lock").write_text(lock.format(v="0.1.0b6"))
+    setupstate.record(tmp_path)
+    (tmp_path / "uv.lock").write_text(lock.format(v="0.1.0b7"))  # only our own version changed
+    assert setupstate.needed(tmp_path) == ""
+    (tmp_path / "uv.lock").write_text(lock.format(v="0.1.0b7").replace('"2.0"', '"2.1"'))  # a package changed
+    assert "needs packages" in setupstate.needed(tmp_path)

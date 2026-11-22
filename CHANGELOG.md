@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0b7 – unreleased
+
+- **Cancel render:** a button in the watcher (and `crucible render --cancel`) removes the waiting and rendering
+  lines; workers stop their current batch, finished voice files are kept.
+- **An unfinished render no longer starts by itself:** when the coordinator starts with lines left from an earlier
+  render, rendering is paused and the watcher asks: Resume or Cancel render.
+- Fix: "Setup needed" was shown after every new version, even when no package changed (the check looked at
+  Voice Crucible's own version in uv.lock).
+
 ## 0.1.0b6 – 2026-11-22
 
 Tested on Windows 11 with an NVIDIA RTX 40 series card (coordinator, watcher and worker on one PC), against

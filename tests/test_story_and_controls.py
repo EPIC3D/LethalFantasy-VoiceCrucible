@@ -211,3 +211,29 @@ def test_render_clock_is_kept_in_the_queue(tmp_path):
     q.close()
     s2, e2 = JobQueue(tmp_path / "q.sqlite").run_times()  # survives a restart
     assert s2 == start and e2 is not None and e2 >= start
+
+
+def test_cancel_render_removes_waiting_lines_and_stops_their_workers(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key=f"K{i}", character="C", text="t") for i in range(5)])
+    job = q.claim("w", 2)
+    q.finish(job.job_id, job.lines[0].uid, True)
+    assert q.cancel() == 4  # 1 still rendering + 3 waiting; the finished one stays
+    assert q.counts() == {"pending": 0, "leased": 0, "done": 1, "failed": 0}
+    assert job.job_id in q.cancelled_jobs  # the heartbeat tells this worker to stop
+    assert q.finish(job.job_id, job.lines[1].uid, True) is None  # its late result is ignored
+
+
+def test_unfinished_render_starts_paused(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.coordinator.run import hold_leftover
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite")
+    state = SimpleNamespace(queue=q, registry=WorkerRegistry(4), leftover=None)
+    hold_leftover(state)
+    assert not state.registry.paused and state.leftover is None  # empty queue: nothing to hold
+    q.add("test", [Line(key="K1", character="C", text="t")])
+    hold_leftover(state)
+    assert state.registry.paused and state.leftover["lines"] == 1 and state.leftover["since"]

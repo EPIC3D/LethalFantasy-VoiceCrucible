@@ -58,6 +58,7 @@ def status(state: CoordinatorState) -> dict:
         "counts": counts,
         "eta_seconds": round(remaining / speed * 60) if speed > 0 and remaining else None,
         "elapsed_seconds": elapsed, "lines_per_min": round(speed, 1),
+        "leftover": state.leftover if state.leftover and remaining else None,
         "workers": workers,
         "problems": state.queue.recent_problems(),
         "pairing_code": None if code is None else {"code": code[0], "seconds_left": round(code[1] - time.time())},
@@ -259,8 +260,15 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                 names = state.registry.request_update()
                 _log.info("update requested in the watcher for: %s", ", ".join(names) or "nobody")
                 self._json(200, {"workers": names})
+            elif self.path == "/api/cancel-render":
+                n = state.queue.cancel()
+                state.leftover = None
+                _log.info("render cancelled in the watcher: %d waiting/rendering line(s) removed", n)
+                self._json(200, {"removed": n})
             elif self.path == "/api/pause":
                 state.registry.paused = self._body().get("paused") is True
+                if not state.registry.paused:
+                    state.leftover = None  # resumed: the earlier render goes on
                 _log.info("rendering %s in the watcher", "paused" if state.registry.paused else "resumed")
                 self._json(200, {"paused": state.registry.paused})
             elif self.path == "/api/worker":

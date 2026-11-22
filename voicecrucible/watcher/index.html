@@ -51,6 +51,12 @@
   <h2>Progress</h2>
   <div class="bar"><div id="bar" style="width:0"></div></div>
   <div class="stats" id="stats"></div>
+  <div id="leftover" hidden style="margin-top:10px; padding:10px; border:1px solid var(--warn); border-radius:8px">
+    <b class="retry">Unfinished render</b> <span id="leftover-text"></span>
+    <div class="sub" style="margin:4px 0 8px">Rendering is paused until you decide.</div>
+    <button onclick="togglePause()">Resume</button> <button class="small" onclick="cancelRender()">Cancel render</button>
+  </div>
+  <p id="cancel-row" hidden style="margin:10px 0 0"><button class="small" onclick="cancelRender()">Cancel render</button></p>
 </div>
 
 
@@ -200,6 +206,11 @@ async function refresh() {
       `<tr><td>${esc(f.folder)}</td><td>${f.files}</td><td><code>${esc(f.path)}</code></td></tr>`).join("")
       || `<tr><td colspan="3" class="off">No files yet.</td></tr>`;
     paused = st.paused;
+    const lo = st.leftover, waiting = c.pending + c.leased;
+    document.getElementById("leftover").hidden = !lo;
+    if (lo) document.getElementById("leftover-text").textContent =
+      `– ${lo.lines} line(s) were still waiting when the coordinator started` + (lo.since ? ` (render started ${lo.since}).` : ".");
+    document.getElementById("cancel-row").hidden = !!lo || !waiting;
     document.getElementById("pause").textContent = paused ? "Resume rendering" : "Pause rendering";
     document.getElementById("paired").innerHTML = (st.paired || []).map(w =>
       `<tr><td>${esc(w.name)}</td><td><button class="small" data-id="${esc(w.worker_id)}" data-name="${esc(w.name)}" onclick="unpair(this)">Unpair</button></td></tr>`).join("")
@@ -223,6 +234,18 @@ async function requestUpdate() {
   refresh();
 }
 let paused = false;
+async function cancelRender() {
+  const st = await (await fetch("/api/status")).json();
+  const n = st.counts.pending + st.counts.leased;
+  if (!confirm(`Cancel the render? ${n} waiting or rendering line(s) are removed from the queue. ` +
+               `Finished voice files are kept; workers stop their current batch.`)) return;
+  const resp = await fetch("/api/cancel-render", {method: "POST", headers: H});
+  const r = await resp.json().catch(() => ({}));
+  alert(resp.ok && typeof r.removed === "number" ? `${r.removed} line(s) removed.`
+    : "The coordinator could not cancel the render (" + (r.error || resp.status) + "). If it was just updated, " +
+      "restart coordinator.cmd so the program and this page are the same version.");
+  refresh();
+}
 async function togglePause() {
   if (!paused && !confirm("Pause? The workers finish their current batch and then wait.")) return;
   await fetch("/api/pause", {method: "POST", headers: H, body: JSON.stringify({paused: !paused})}); refresh();

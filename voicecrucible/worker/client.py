@@ -194,6 +194,7 @@ class WorkerClient:
         _log.info("job %s: %d line(s), engine '%s'", job.job_id[:8], len(job.lines), job.engine)
         self._job = job
         self._busy_lines = len(job.lines)
+        self._cancel.clear()  # a cancel meant the previous job; a stopped worker gets no new job at all
         try:
             takes = self.runner.render(job, cancel=self._cancel.is_set)
         except (ImportError, seedvc.SeedVCNotInstalled) as e:  # this machine lacks a component: not the lines' fault

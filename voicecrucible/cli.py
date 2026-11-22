@@ -59,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--dry-run", action="store_true", help="show what would be queued, queue nothing")
     r.add_argument("--all", action="store_true", help="also lines that already have a voice file (render them again)")
     r.add_argument("--retry-failed", action="store_true", help="queue the lines that failed for good again")
+    r.add_argument("--cancel", action="store_true", help="cancel the render: remove waiting and rendering lines "
+                   "(finished voice files are kept)")
     r.add_argument("--test", type=int, metavar="N", help="queue N test lines (beep engine, no model needed)")
     r.add_argument("--profile", default="", help="profile to use instead of [render] profile")
     st = cmds["story"]
@@ -157,6 +159,12 @@ def _cmd_render(cfg: config_mod.Config, args: argparse.Namespace) -> int:
     """Queue lines on this (coordinator) machine: the game's lines (--lines) or test beeps (--test)."""
     from voicecrucible.core.jobs import Line
     from voicecrucible.core.queue import JobQueue
+    if args.cancel:
+        queue = JobQueue(cfg.path(cfg.paths.work_dir) / "coordinator" / "queue.sqlite")
+        n = queue.cancel()
+        queue.close()
+        log.get("crucible").info("render cancelled: %d waiting/rendering line(s) removed (finished files are kept)", n)
+        return 0
     if args.retry_failed:
         queue = JobQueue(cfg.path(cfg.paths.work_dir) / "coordinator" / "queue.sqlite")
         n = queue.retry_failed()

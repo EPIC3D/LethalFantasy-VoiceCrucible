@@ -42,6 +42,7 @@ class CoordinatorState:
     takes_dir: Path  # failed takes kept as fallback candidates
     log_dir: Path | None = None  # shown in the watcher
     profile: str = ""  # active profile name, shown in the watcher
+    leftover: dict | None = None  # an unfinished render found at start: {"lines", "since"}; rendering starts paused
     stop_event: threading.Event = field(default_factory=threading.Event)  # set to end the coordinator (watcher: run setup)
 
 
@@ -167,10 +168,12 @@ def _heartbeat(state: CoordinatorState, worker: str, body: dict, address: str) -
                                      str(body.get("session", "")),
                                      body.get("features") if isinstance(body.get("features"), list) else [])
     job_id = body.get("job_id")
+    commands = state.registry.commands(worker)
     if isinstance(job_id, str) and job_id:
         state.queue.touch(worker, job_id[:64])
-    return 200, {"ok": True, "update_requested": update_now, "protocol": protocol.PROTOCOL_VERSION,
-                 **state.registry.commands(worker)}
+        if job_id[:64] in state.queue.cancelled_jobs:  # its lines were removed (Cancel render): stop working on it
+            commands["cancel"] = True
+    return 200, {"ok": True, "update_requested": update_now, "protocol": protocol.PROTOCOL_VERSION, **commands}
 
 
 def _claim(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:
