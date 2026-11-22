@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.1.0b9 – unreleased
+## 0.1.0b9 – 2026-11-22
+
+Tested on Windows 11 with an NVIDIA RTX 40 series card (coordinator, watcher, worker and re-check on one PC), against
+LethalFantasy beta 1.0.3 and its existing voice pack. Workers on 0.1.0b8 update themselves (worker.cmd restarts them).
 
 - **Edit a take** (Trim… in Finished lines and Problems): the whole waveform, ▶ from any point, **Cut before here** (a bad
   sound at the start; a short silence and a fade-in are put back) and **Insert pause here** (0.25–1 s – a dramatic pause
