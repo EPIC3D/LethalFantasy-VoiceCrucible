@@ -35,7 +35,7 @@ def _compare(version: str) -> str:
 
 def status(state: CoordinatorState) -> dict:
     """Everything the watcher page shows, as one JSON object."""
-    counts = state.queue.counts()
+    counts = state.queue.progress_counts()  # since the last Reset in the watcher
     workers = state.registry.snapshot()
     paired = state.pairing.paired()
     for wid, info in paired.items():
@@ -58,9 +58,12 @@ def status(state: CoordinatorState) -> dict:
         "counts": counts,
         "eta_seconds": round(remaining / speed * 60) if speed > 0 and remaining else None,
         "elapsed_seconds": elapsed, "lines_per_min": round(speed, 1),
+        "failed_total": state.queue.counts()["failed"],  # also those hidden in the watcher (Clear list) or before a Reset
+        "takes": state.queue.max_attempts,
         "leftover": state.leftover if state.leftover and remaining else None,
         "workers": workers,
-        "problems": state.queue.recent_problems(),
+        "problems": [{**p, "path": str(f[0]) if (f := _line_files(state, p["uid"])) else ""}
+                     for p in state.queue.recent_problems()],
         "pairing_code": None if code is None else {"code": code[0], "seconds_left": round(code[1] - time.time())},
         "output": _output(state),
     }
@@ -90,6 +93,94 @@ def _output(state: CoordinatorState) -> dict:
              "report": str(state.output_root / "report.tsv"), "logs": str(state.log_dir) if state.log_dir else ""}
     _output_cache.update(at=time.time(), value=value)
     return value
+
+
+def _reveal(path: Path) -> None:
+    """Show a voice file in Explorer, selected (the watcher runs on this computer; the path is inside the output)."""
+    import subprocess
+    import sys
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", f"/select,{path}"])
+    else:
+        subprocess.Popen(["xdg-open", str(path.parent)])
+
+
+def _line_files(state: CoordinatorState, uid: int) -> tuple[Path, Path] | None:
+    """(current voice file, its earlier version <name>.bak.<ext>) of a line – only inside the output folder."""
+    output = state.queue.problem_audio(uid)[0] if type(uid) is int else ""
+    if not output:
+        return None
+    path = (state.output_root / output).resolve()
+    if not path.is_relative_to(state.output_root.resolve()):
+        return None
+    return path, path.with_name(f"{path.stem}.bak{path.suffix}")
+
+
+def _insert_pause(state: CoordinatorState, uid, ms, length_ms) -> tuple[int, dict]:
+    """Insert a silence into a line's voice file (a pause between sentences or before the line); the file before is
+    kept as <name>.bak.<ext>."""
+    from voicecrucible.core import audio
+    files = _line_files(state, uid)
+    if files is None or not files[0].is_file():
+        return 404, {"error": "this line has no voice file"}
+    if type(ms) not in (int, float) or type(length_ms) not in (int, float) or not 50 <= length_ms <= 3000:
+        return 400, {"error": "a pause of 50 to 3000 ms at a point of the line"}
+    current, old = files
+    y, sr = audio.decode(current.read_bytes())
+    if not 0 <= ms <= len(y) / sr * 1000:
+        return 400, {"error": "the point is outside the line"}
+    out = audio.insert_pause(y, sr, ms / 1000, length_ms / 1000)
+    current.replace(old)
+    current.write_bytes(audio.encode(out, sr, current.suffix.lstrip(".")))
+    state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
+    _log.info("%s: %d ms pause inserted at %d ms in the watcher (the version before is kept as .bak)",
+              current.stem, length_ms, ms)
+    return 200, {"paused": current.stem}
+
+
+def _trim(state: CoordinatorState, uid, ms) -> tuple[int, dict]:
+    """Trim view data (ms None: the level of the first 2 s and a suggested cut), or cut the first `ms` of a line's
+    voice file – a bad sound before an otherwise good line. The file before the cut is kept as <name>.bak.<ext>."""
+    from voicecrucible.core import audio
+    files = _line_files(state, uid)
+    if files is None or not files[0].is_file():
+        return 404, {"error": "this line has no voice file"}
+    current, old = files
+    y, sr = audio.decode(current.read_bytes())
+    if ms is None:
+        step = 10 if len(y) / sr <= 20 else 50  # whole line, at most ~2000 bars
+        return 200, {"envelope": audio.envelope(y, sr, seconds=len(y) / sr, step=step / 1000), "step_ms": step,
+                     "duration_ms": round(len(y) / sr * 1000),
+                     "suggest_ms": round(audio.speech_start(y, sr) * 1000)}
+    if not 0 < ms < len(y) / sr * 1000 - 200:
+        return 400, {"error": "cut between 0 ms and the end of the line"}
+    cut = audio.trim_start(y, sr, ms / 1000)
+    current.replace(old)  # the version before the cut: Restore old brings it back
+    current.write_bytes(audio.encode(cut, sr, current.suffix.lstrip(".")))
+    state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
+    _log.info("%s: first %d ms cut in the watcher (the version before is kept as .bak)", current.stem, ms)
+    return 200, {"trimmed": current.stem}
+
+
+def _choose_version(state: CoordinatorState, uid, restore_old: bool) -> tuple[int, dict]:
+    """After a Redo and a listen: keep the new take (the old one is deleted), or bring the old one back (the new one
+    becomes the .bak – nothing is lost)."""
+    files = _line_files(state, uid)
+    if files is None or not files[1].is_file():
+        return 404, {"error": "this line has no earlier version"}
+    current, old = files
+    if restore_old:
+        swap = current.with_name(current.name + ".swap")
+        current.replace(swap)
+        old.replace(current)
+        swap.replace(old)
+        state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
+        _log.info("%s: the earlier version is back (the newer one is kept as .bak)", current.stem)
+        return 200, {"restored": current.stem}
+    old.unlink()
+    state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
+    _log.info("%s: new take kept, the earlier version was deleted", current.stem)
+    return 200, {"kept": current.stem}
 
 
 def _skip(state: CoordinatorState, uid) -> tuple[int, dict]:
@@ -167,6 +258,12 @@ class Controls:
         self.default_output = cfg.path(cfg.paths.output_dir)
         self.output_dir = self.default_output
 
+    def restore_takes(self, state: CoordinatorState) -> None:
+        """Use the takes per line last set in the watcher."""
+        n = self.memory.load().get("takes")
+        if type(n) is int and 1 <= n <= 10:
+            state.queue.max_attempts = n
+
     def restore_output(self, state: CoordinatorState) -> None:
         """Use the voice pack folder last chosen in the watcher (if it is still allowed)."""
         from voicecrucible.watcher import tasks
@@ -224,7 +321,12 @@ class Controls:
             voices, voices_error = tasks.voices(self.profile_folder), ""
         except Exception as e:  # noqa: BLE001 - a broken profile is shown on the page, not a crash
             voices, voices_error = [], str(e)
-        return {"task": self.tasks.status(), "local_worker": self.worker.status(), "form": self.memory.load(),
+        task = self.tasks.status()
+        local_gpu = []
+        if task["running"]:  # this computer's GPU while a task (e.g. a re-check) uses it
+            from voicecrucible.worker import gpu
+            local_gpu = gpu.query()
+        return {"task": task, "local_gpu": local_gpu, "local_worker": self.worker.status(), "form": self.memory.load(),
                 "engines": sorted(engines.available()), "default_engine": self.cfg.render.engine,
                 "profile": self.profile_folder.name, "bundled": self.profile_folder.name in tasks.BUNDLED_PROFILES,
                 "default_profile": self.default_folder.name, "output_dir": str(self.output_dir),
@@ -304,6 +406,23 @@ class Controls:
             return tasks.export_info(str(body.get("lines", "")))
         if path == "/api/diagnose":
             return {"report": tasks.diagnose_report(self.cfg)}
+        if path == "/api/takes":
+            n = body.get("takes")
+            if type(n) is not int or not 1 <= n <= 10:
+                raise tasks.TaskError("takes per line: 1 to 10")
+            state.queue.max_attempts = n  # used for every result from now on
+            self.memory.save({"takes": n})
+            _log.info("takes per line set to %d in the watcher", n)
+            return {"takes": n}
+        if path == "/api/task-control":
+            cmd = str(body.get("cmd", ""))
+            if cmd not in ("pause", "resume", "stop"):
+                raise tasks.TaskError("unknown command")
+            if not self.tasks.status()["running"]:
+                raise tasks.TaskError("nothing is running")
+            self.tasks.control({"pause": cmd == "pause", "stop": cmd == "stop"})
+            _log.info("watcher: %s the running task", cmd)
+            return {"ok": True}
         if path == "/api/run-setup":
             import threading
             if self.tasks.status()["running"]:
@@ -344,6 +463,16 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                 self._json(200, status(state))
             elif self.path == "/api/control" and controls is not None:
                 self._json(200, controls.status())
+            elif self.path.startswith("/api/old-audio?"):
+                from urllib.parse import parse_qs, urlparse
+                try:
+                    files = _line_files(state, int(parse_qs(urlparse(self.path).query).get("uid", ["-1"])[0]))
+                except ValueError:
+                    files = None
+                if files is not None and files[1].is_file():
+                    self._send(200, files[1].read_bytes(), "audio/ogg" if files[1].suffix == ".ogg" else "audio/wav")
+                else:
+                    self._json(404, {"error": "no earlier version"})
             elif self.path.startswith("/api/problem-audio?"):
                 self._problem_audio()
             elif self.path.startswith("/api/voice?") and controls is not None:
@@ -365,6 +494,60 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                 names = state.registry.request_update()
                 _log.info("update requested in the watcher for: %s", ", ".join(names) or "nobody")
                 self._json(200, {"workers": names})
+            elif self.path == "/api/retry":
+                uids = self._body().get("uids")
+                if not (isinstance(uids, list) and all(type(u) is int for u in uids)) or not uids:
+                    self._json(400, {"error": "no lines"})
+                else:
+                    n = state.queue.retry_failed(uids[:10000])
+                    _log.info("%d failed line(s) queued again from the watcher's Problems", n)
+                    self._json(200, {"queued": n})
+            elif self.path == "/api/progress-reset":
+                state.queue.reset_progress()
+                state.registry.reset_speed()
+                _log.info("progress reset in the watcher")
+                self._json(200, {"ok": True})
+            elif self.path == "/api/finished":
+                query = self._body().get("q", "")
+                found = state.queue.finished(query if isinstance(query, str) else "")
+                for x in found:  # an earlier version kept by Redo: listen to both, then keep one
+                    files = _line_files(state, x["uid"])
+                    x["has_old"] = files is not None and files[1].is_file()
+                    x["path"] = str(files[0]) if files else ""
+                self._json(200, {"lines": found})
+            elif self.path == "/api/trim-info":
+                self._json(*_trim(state, self._body().get("uid"), None))
+            elif self.path == "/api/insert-pause":
+                body = self._body()
+                self._json(*_insert_pause(state, body.get("uid"), body.get("ms"), body.get("length_ms")))
+            elif self.path == "/api/trim":
+                body = self._body()
+                ms = body.get("ms")
+                self._json(*_trim(state, body.get("uid"), ms if type(ms) in (int, float) else -1))
+            elif self.path == "/api/reveal":
+                files = _line_files(state, self._body().get("uid"))
+                if files is None or not files[0].is_file():
+                    self._json(404, {"error": "this line has no voice file"})
+                else:
+                    _reveal(files[0])
+                    self._json(200, {"path": str(files[0])})
+            elif self.path in ("/api/keep-new", "/api/restore-old"):
+                self._json(*_choose_version(state, self._body().get("uid"), self.path.endswith("restore-old")))
+            elif self.path == "/api/redo":
+                body = self._body()
+                uid = body.get("uid")
+                once = body.get("once") if isinstance(body.get("once"), dict) else {}
+                text = once.get("spoken_text")
+                once = {k: round(float(v), 3) for k, v in once.items()  # only these sliders, each 0..1
+                        if k in ("exaggeration", "cfg_weight") and type(v) in (int, float) and 0 <= v <= 1}
+                if isinstance(text, str) and text.strip():  # free text spoken this round (subtitle unchanged)
+                    once["spoken_text"] = " ".join(text.split())[:500]
+                line = state.queue.redo(uid, once or None) if type(uid) is int else None
+                if line is not None:
+                    _log.info("%s queued again from the watcher (new take%s)", line.file_stem,
+                              f", this round with {once}" if once else "")
+                self._json(200 if line else 404, {"queued": line.file_stem} if line else
+                           {"error": "this line cannot be rendered again right now (it is waiting or rendering)"})
             elif self.path == "/api/skip":
                 self._json(*_skip(state, self._body().get("uid")))
             elif self.path == "/api/accept":
@@ -399,7 +582,7 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
             elif controls is not None and self.path in ("/api/task", "/api/pick", "/api/local-worker", "/api/voice-replace",
                                                          "/api/profile-select", "/api/profile-new",
                                                          "/api/profile-import", "/api/profile-open", "/api/run-setup",
-                                                         "/api/diagnose", "/api/output-select",
+                                                         "/api/diagnose", "/api/output-select", "/api/task-control", "/api/takes",
                                                          "/api/export-info"):
                 from voicecrucible.watcher.tasks import TaskError
                 try:

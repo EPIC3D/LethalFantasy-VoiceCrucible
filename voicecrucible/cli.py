@@ -23,6 +23,7 @@ COMMANDS = {
     "config": "show the effective configuration and check it for errors",
     "diagnose": "collect technical facts for a bug report (personal data removed)",
     "story": "Memory Orb audiobook: queue its parts, then --join them into pages",
+    "recheck": "check existing voice files again with today's checks (no rendering); failures go to Problems",
     "update": "check GitHub for a new version and install it after you confirm (signature verified)",
     "profile": "create a profile from the template (new), list profiles, or install a shared profile pack",
 }
@@ -64,6 +65,13 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--test", type=int, metavar="N", help="queue N test lines (beep engine, no model needed)")
     r.add_argument("--profile", default="", help="profile to use instead of [render] profile")
     r.add_argument("--output", default="", help="voice pack folder to use instead of [paths] output_dir")
+    rc = cmds["recheck"]
+    rc.add_argument("--from", dest="source", default="", help="a voice pack folder to check (only read; its files are "
+                    "copied into the output folder), e.g. the game's voices\\en; default: the finished lines")
+    rc.add_argument("--lines", type=Path, help="the game's line export (needed with --from)")
+    rc.add_argument("--only", default="", help="only keys starting with this")
+    rc.add_argument("--profile", default="", help="profile to use instead of [render] profile")
+    rc.add_argument("--output", default="", help="voice pack folder to use instead of [paths] output_dir")
     st = cmds["story"]
     st.add_argument("--lines", type=Path, required=True, help="folder with the plugin's line export")
     st.add_argument("--texts", type=Path, help="page texts in another language (default: the export's English)")
@@ -245,7 +253,14 @@ def _cmd_update(cfg: config_mod.Config, args: argparse.Namespace) -> int:
 
 _HANDLERS = {"coordinator": _cmd_coordinator, "worker": _cmd_worker, "pair": _cmd_pair, "render": _cmd_render,
              "direct": _cmd_direct, "report": _cmd_report, "setup": _cmd_setup, "diagnose": _cmd_diagnose,
-             "update": _cmd_update, "profile": _cmd_profile, "story": lambda c, a: _cmd_story(c, a)}
+             "update": _cmd_update, "profile": _cmd_profile, "story": lambda c, a: _cmd_story(c, a),
+             "recheck": lambda c, a: _cmd_recheck(c, a)}
+
+
+def _cmd_recheck(cfg: config_mod.Config, args: argparse.Namespace) -> int:
+    """Check existing voice files again."""
+    from voicecrucible.lethalfantasy import recheck
+    return _with_profile(recheck.recheck, cfg, args)
 
 
 def _cmd_story(cfg: config_mod.Config, args: argparse.Namespace) -> int:

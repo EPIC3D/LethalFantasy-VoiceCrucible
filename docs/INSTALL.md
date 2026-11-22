@@ -49,6 +49,12 @@ Uninstall = delete the folder.
 Copy `output\voices\` into the game's `BepInEx\plugins\LethalFantasyTTS\` to use the pack. A line that failed
 every check still gets its best take (marked "failed – best take used" in the report).
 
+**Check voices again** (no rendering): Render panel → "Re-check voice files" → **Re-check voices**, or
+`crucible.cmd recheck`. With "Check files from" (`--from <folder> --lines <export>`) it checks any voice pack, e.g.
+the one in the game – that folder is only read; its files are copied into your voice pack folder (a different file
+there is kept as `.bak.ogg`) and checked there.
+Lines that fail are listed under Problems: listen, then Accept, Redo or Skip.
+
 **After a game update:** export the lines again and run the same `render` command – only the new lines are
 rendered, the ones you already have are skipped (`--all` renders everything again).
 

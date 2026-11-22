@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from voicecrucible.core.jobs import Line
-from voicecrucible.engines.base import Audio, Engine, OutOfMemory, seed_for
+from voicecrucible.engines.base import Audio, Engine, OutOfMemory, seed_for, spoken_text
 
 
 SHORT_LINE_WORDS = 2  # lines this short ("Mm-hmm", "Definitely") ...
@@ -64,7 +64,7 @@ class ChatterboxEngine(Engine):
         out = []
         for line in lines:
             self._torch.manual_seed(seed_for(line))
-            text = longer_sound(line.text, line.attempt, str(line.params.get("last_take_text", "")))
+            text = longer_sound(spoken_text(line), line.attempt, str(line.params.get("last_take_text", "")))
             exaggeration, cfg_weight = steady_short_line(line.text, float(line.params.get("exaggeration", 0.5)),
                                                          float(line.params.get("cfg_weight", 0.5)))
             try:

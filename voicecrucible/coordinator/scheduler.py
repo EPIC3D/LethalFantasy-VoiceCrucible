@@ -138,6 +138,13 @@ class WorkerRegistry:
         """Lines per job: what the worker asks for (it knows its VRAM), capped by the coordinator."""
         return max(1, min(requested, self.max_batch))
 
+    def reset_speed(self) -> None:
+        """Progress reset in the watcher: per-worker done / failed / lines per minute start from zero."""
+        now = time.time()
+        with self._lock:
+            for w in self._workers.values():
+                w.done, w.failed, w.first_seen = 0, 0, now
+
     def snapshot(self) -> list[dict]:
         """Workers for the watcher, with online flag and lines per minute."""
         now = time.time()

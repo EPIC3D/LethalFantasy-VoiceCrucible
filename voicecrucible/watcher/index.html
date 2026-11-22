@@ -7,6 +7,7 @@
 <style>
   :root { --bg:#16131c; --panel:#211c2a; --text:#ece6f5; --muted:#a59cb5; --accent:#c38cff; --ok:#6fd49a; --bad:#ff7a8a; --warn:#ffc65c; }
   * { box-sizing: border-box; }
+  [hidden] { display:none !important; }  /* also for elements with an inline display */
   body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
   h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 8px; color:var(--accent); }
   h2.fold { cursor:pointer; user-select:none; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
@@ -67,6 +68,7 @@
   <h2 class="plain">Progress<a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/INSTALL.md#3-render-one-machine" target="_blank" rel="noopener" title="How far the render is: finished, rendering, waiting and failed lines, time left, runtime and speed of all workers.">?</a></h2>
   <div class="bar"><div id="bar" style="width:0"></div></div>
   <div class="stats" id="stats"></div>
+  <div class="actions" style="margin-top:8px"><button class="ghost" onclick="resetProgress()" title="Count from zero again (finished, failed, runtime, speed). Nothing is deleted.">Reset</button></div>
   <div id="leftover" hidden style="margin-top:10px; padding:10px; border:1px solid var(--warn); border-radius:8px">
     <b class="retry">Unfinished render</b> <span id="leftover-text"></span>
     <div class="sub" style="margin:4px 0 8px">Rendering is paused until you decide.</div>
@@ -140,6 +142,10 @@
     <input type="text" id="f-only" placeholder="(all) e.g. AKIPO_DIALOGUE_EVENT_HUG">
     <label for="f-limit">At most</label>
     <div class="row"><input type="number" id="f-limit" min="0" value="0"> <span class="sub" style="margin:6px 0 0">lines (0 = all)</span></div>
+    <label for="f-takes">Takes per line</label>
+    <div class="row"><input type="number" id="f-takes" min="1" max="10" value="3" onchange="setTakes()">
+      <span class="sub" style="margin:6px 0 0">tries before a line is marked failed (1–10); more = fewer lines for you to
+        check, but hard lines take longer. Used right away.</span></div>
     <label for="f-all">Render again</label>
     <div><input type="checkbox" id="f-all"> <span class="sub">also lines that already have a voice file</span></div>
   </div>
@@ -151,6 +157,21 @@
     </div>
     <div class="sub">Set <code>[render] language</code> in voicecrucible.toml to the pack language first.</div>
   </details>
+  <details><summary>Re-check voice files (no rendering)</summary>
+    <div class="form" style="margin-top:8px">
+      <label for="f-source">Check files from</label>
+      <div>
+        <div class="row"><input type="text" id="f-source" placeholder="(empty) the finished lines in the voice pack folder">
+          <button class="ghost" onclick="pickInto('f-source','folder','A voice pack to check, e.g. voices/en in the game')">Browse…</button></div>
+        <div class="sub" style="margin:4px 0 0">Optional, e.g. the voice pack in the game. That folder is only read: its
+          files are copied into the voice pack folder above and checked there – a different file already there is kept as
+          <code>.bak.ogg</code>.</div>
+      </div>
+    </div>
+    <div class="actions"><button class="ghost" onclick="runTask('recheck')">Re-check voices</button></div>
+    <div class="sub">Runs today's checks on existing files (uses this computer's GPU). Lines that fail go to Problems –
+      listen to them there and Accept, Redo or Skip. "Only keys starting with" works here too.</div>
+  </details>
   <div class="actions">
     <button onclick="runTask('dry-run')">Check (dry run)</button>
     <button onclick="runTask('render')">Start rendering</button>
@@ -161,6 +182,12 @@
   </div>
   <div class="err" id="task-err"></div>
   <div class="sub" id="task-title" style="margin:8px 0 0"></div>
+  <div id="task-progress" hidden><div class="bar"><div id="task-bar" style="width:0"></div></div>
+    <div class="stats" id="task-progress-text"></div>
+    <div class="sub" id="task-gpu" style="margin:4px 0 0"></div>
+    <div class="actions" id="task-ctl" style="margin-top:8px">
+      <button class="ghost" id="task-pause" onclick="taskControl(this.dataset.cmd)">Pause</button>
+      <button class="small" onclick="taskControl('stop')">Stop</button></div></div>
   <pre class="log" id="task-out" hidden></pre>
   <div class="sub">Every button runs the same <code>crucible.cmd</code> command you can also type yourself.</div>
 </div>
@@ -182,9 +209,67 @@
 
 
 <div class="panel">
+  <h2 class="fold" data-fold="finished" title="Click to fold or unfold">Finished lines <span class="sum" id="sum-finished"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/INSTALL.md#3-render-one-machine" target="_blank" rel="noopener" title="Listen to the lines that passed (newest first) and search them by key or text. Redo renders one line again with a new take; the old file is kept as .bak.ogg.">?</a></h2>
+  <div class="row" style="max-width:720px; margin-bottom:8px"><input type="text" id="fin-q" placeholder="search key or text, e.g. STATUE or Lena" oninput="finishedSoon()">
+    <button class="ghost" onclick="clearView('finished')" title="Hide the lines listed now; new ones still appear. Nothing is deleted.">Clear list</button>
+    <button class="ghost" id="fin-all" hidden onclick="showAll('finished')">Show all</button></div>
+  <table><thead><tr><th>Finished</th><th>Line</th><th>Character</th><th>Take</th><th></th></tr></thead>
+  <tbody id="finished"></tbody></table>
+</div>
+
+<div class="panel">
   <h2 class="fold" data-fold="problems" title="Click to fold or unfold">Problems <span class="sum" id="sum-problems"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/TROUBLESHOOTING.md" target="_blank" rel="noopener" title="Lines that failed a quality check: they are rendered again; after the last attempt the best take is used and listed in report.tsv.">?</a></h2>
+  <div class="actions" style="margin:0 0 8px">
+    <button class="ghost" id="prob-retry" onclick="retryShown()" title="Render the failed lines shown here again (new takes) – not the hidden ones">Retry these</button>
+    <button class="ghost" onclick="clearView('problems')" title="Hide the problems listed now; a line that fails again comes back. Nothing is deleted.">Clear list</button>
+    <button class="ghost" id="prob-all" hidden onclick="showAll('problems')">Show all</button></div>
   <table><thead><tr><th>Line</th><th>Character</th><th>State</th><th>Attempts</th><th>Reason</th><th></th></tr></thead>
   <tbody id="problems"></tbody></table>
+</div>
+
+<div id="trim-box" hidden style="position:fixed; inset:0; background:#0009; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px">
+  <div class="panel" style="max-width:640px; width:100%; margin:0">
+    <h2>Edit the take <span id="trim-key" class="sub"></span></h2>
+    <canvas id="trim-wave" width="600" height="90" style="width:100%; background:#0004; border-radius:6px"></canvas>
+    <div class="row" style="margin-top:6px"><input type="range" id="trim-ms" min="0" step="10" oninput="drawTrim()" style="flex:1">
+      <b id="trim-ms-v" style="width:80px; text-align:right"></b></div>
+
+    <div class="sub" style="margin-top:6px">The whole line; the yellow line is the point (green tick: where the speech
+      starts). Listen from the point first. The file before each change is kept as .bak.ogg ("Restore old").</div>
+    <div class="actions"><button class="ghost" onclick="playFromCut()">▶ from here</button>
+      <button onclick="applyTrim()" title="Remove everything before the point (a bad sound at the start); a short silence and a fade-in are put back">Cut before here</button>
+      <button class="ghost" onclick="insertPause()" title="Insert a silence at the point – a dramatic pause between sentences, or a longer start at 0 ms">Insert pause here</button>
+      <select id="trim-pause"><option value="250">0.25 s</option><option value="500" selected>0.5 s</option>
+        <option value="750">0.75 s</option><option value="1000">1 s</option></select>
+      <button class="ghost" onclick="closeTrim()">Close</button></div>
+
+  </div>
+</div>
+
+<div id="redo-box" hidden style="position:fixed; inset:0; background:#0009; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px">
+  <div class="panel" style="max-width:520px; width:100%; margin:0">
+    <h2>Redo <span id="redo-key" class="sub"></span></h2>
+    <div id="redo-text" style="white-space:pre-wrap; margin-bottom:10px"></div>
+    <div class="form">
+      <label for="redo-say">spoken text</label>
+      <div class="row"><textarea id="redo-say" rows="2" style="flex:1; background:#0003; color:var(--text); border:1px solid #fff2; border-radius:6px; padding:5px 8px; font:inherit; resize:vertical"></textarea>
+        <button class="ghost" title="Back to the line's original text from the game's export" onclick="$('redo-say').value = redoRaw">↺ original</button></div>
+      <label for="redo-ex">exaggeration</label>
+      <div class="row"><input type="range" id="redo-ex" min="0" max="1" step="0.05" oninput="$('redo-ex-v').textContent = this.value" style="flex:1">
+        <b id="redo-ex-v" style="width:40px"></b></div>
+      <label for="redo-cfg">cfg_weight</label>
+      <div class="row"><input type="range" id="redo-cfg" min="0" max="1" step="0.05" oninput="$('redo-cfg-v').textContent = this.value" style="flex:1">
+        <b id="redo-cfg-v" style="width:40px"></b></div>
+    </div>
+    <div class="sub" style="margin-top:8px">exaggeration = how strong the emotion is (lower = steadier, fewer garbled
+      starts); cfg_weight = how closely it keeps the reference voice and pace. These values are used for this Redo only
+      (up to the takes per line); afterwards the line has its own settings again. The current file is kept as .bak.ogg.
+      Spoken text: what the engine says this round – any text, e.g. "Sooo tiny" for "So tiny" (names are spelled for
+      the engine, e.g. Solahna); the subtitle never changes and the words check listens for this text.</div>
+    <div class="actions"><button onclick="sendRedo(true)">Redo with these</button>
+      <button class="ghost" onclick="sendRedo(false)">Redo with the line's own settings</button>
+      <button class="ghost" onclick="$('redo-box').hidden = true">Cancel</button></div>
+  </div>
 </div>
 
 <script>
@@ -261,18 +346,30 @@ async function refresh() {
       (st.workers.length > on.length ? ` · ${st.workers.length - on.length} offline` : ""));
     setSum("pairing", `${(st.paired || []).length} paired` + (p ? ` · code ${p.code}` : ""));
     setSum("output", (o.folders || []).map(f => `${f.folder} ${f.files}`).join(" · ") || "no files yet");
+    const hidden = viewState().problems || [];  // "Clear list": these problems (line + reason) are hidden
+    st.problems = st.problems.filter(x => !hidden.includes(`${x.uid}|${x.reason}`));
+    lastProblems = st.problems;
+    failedTotal = st.failed_total ?? 0;
+    if (document.activeElement !== $("f-takes") && st.takes) $("f-takes").value = st.takes;
+    document.getElementById("prob-all").hidden = !hidden.length;
     const x0 = st.problems[0];
     setSum("problems", x0 ? `${x0.key}${x0.variant ? "__" + x0.variant : ""} · ${x0.character} · ` +
       (x0.status === "failed" ? "failed" : "will retry") : "none");
     document.getElementById("problems").innerHTML = st.problems.map(x =>
-      `<tr><td title="${esc(realNames(x.text))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
+      `<tr><td title="${esc(hoverText(x))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
       `<td class="${x.status === "failed" ? "bad" : "retry"}">${x.status === "failed" ? "failed" : "will retry"}</td>` +
       `<td>${x.attempts}</td><td>${esc(x.reason)}</td>` +
-      `<td style="white-space:nowrap">${x.has_audio ? `<button class="ghost play" data-uid="${x.uid}" title="Play the take that failed" ` +
+      `<td style="white-space:nowrap">${x.path ? `<button class="ghost" data-uid="${x.uid}" title="${esc(x.path)}
+(click: show in Explorer)" onclick="reveal(this)">📁</button> ` : ""}${x.has_audio ? `<button class="ghost play" data-uid="${x.uid}" title="Play the take that failed" ` +
       `onclick="playProblem(this)">▶</button> <button class="ghost" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(realNames(x.text))}" ` +
       `title="The take is fine: use it and mark the line done" onclick="acceptProblem(this)">Accept</button>` : ""}` +
       ` <button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(realNames(x.text))}" ` +
       `title="It cannot be spoken well (e.g. a hum): leave this line without a voice" onclick="skipProblem(this)">Skip</button>` +
+      (x.has_audio && x.best_take_used ? ` <button class="ghost" data-uid="${x.uid}" data-key="${esc(x.key)}" ` +
+        `title="Cut a bad sound off the start of an otherwise good take" onclick="openTrim(this)">Trim…</button>` : "") +
+      (x.status === "failed" ? ` <button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(hoverText(x))}" data-raw="${esc(x.text)}" ` +
+        `data-ex="${(x.context?.params || {}).exaggeration ?? ""}" data-cfg="${(x.context?.params || {}).cfg_weight ?? ""}" ` +
+        `title="Render again – optionally with other settings for this one round" onclick="redoLine(this)">Redo…</button>` : "") +
       `</td></tr>`).join("") || `<tr><td colspan="6" class="off">None.</td></tr>`;
   } catch (e) {
     document.getElementById("ident").textContent = "Coordinator not reachable – is 'crucible coordinator' running?";
@@ -287,10 +384,11 @@ async function requestUpdate() {
 }
 let problemAudio = null;
 function playProblem(btn) {  // one shared player: a click plays, a second click on the same line stops
-  const src = `/api/problem-audio?uid=${btn.dataset.uid}`;
-  if (problemAudio && !problemAudio.paused && problemAudio.dataset.uid === btn.dataset.uid) { problemAudio.pause(); return; }
+  const src = `/api/${btn.dataset.old ? "old" : "problem"}-audio?uid=${btn.dataset.uid}&t=${Date.now()}`;
+  const id = btn.dataset.uid + (btn.dataset.old ? "old" : "");
+  if (problemAudio && !problemAudio.paused && problemAudio.dataset.uid === id) { problemAudio.pause(); return; }
   if (problemAudio) problemAudio.pause();
-  problemAudio = new Audio(src); problemAudio.dataset.uid = btn.dataset.uid;
+  problemAudio = new Audio(src); problemAudio.dataset.uid = id;
   problemAudio.play().catch(() => alert("No audio for this line yet."));
 }
 let skipSound = "";  // the profile's voices/skip_sound.* (optional), filled by refreshControls
@@ -320,9 +418,183 @@ Its take becomes the line's voice file and the ` +
   if (!resp.ok) alert(r.error || "could not accept this line");
   refresh();
 }
+function hoverText(x) {  // the line, its expression and settings, and the lines around it in the scene
+  const c = x.context || {}, p = c.params || {};
+  const settings = Object.entries(p).filter(([k]) => !["last_take_text", "spoken_text"].includes(k))
+    .map(([k, v]) => `${k} ${v}`).join(", ");
+  return `"${realNames(x.text)}"` +
+    (c.emotion ? `
+
+Expression: ${c.emotion}` + (settings ? ` (${settings})` : "") : "") +
+    (p.last_take_text ? `
+Last take says: "${p.last_take_text}"` : "") +
+    (p.spoken_text ? `
+This round spoken as: "${realNames(p.spoken_text)}"` : "") +
+    (c.prev ? `
+
+Before: "${realNames(c.prev)}"` : "") + (c.next ? `
+After: "${realNames(c.next)}"` : "");
+}
 let nameMap = {};  // respelling -> written name (from the active profile), filled by refreshControls
 function realNames(text) {  // whole words only, so 'Lahna' does not change inside 'Solahna'
   return String(text ?? "").replace(/[\p{L}\p{N}']+/gu, w => nameMap[w] ?? w);
+}
+// "Clear list" only changes what this browser shows – nothing in the queue or the voice pack is touched
+let lastProblems = [], failedTotal = 0;
+async function retryShown() {
+  const uids = lastProblems.filter(x => x.status === "failed").map(x => x.uid);
+  if (!uids.length) { alert("No failed lines shown here (lines that will retry are already queued)."); return; }
+  if (!confirm(`Render the ${uids.length} failed line(s) shown here again (new takes)? Hidden ones are left alone.`)) return;
+  try { const r = await post("/api/retry", {uids}); alert(`${r.queued} line(s) queued again.`); } catch (e) { alert(e.message); }
+  refresh();
+}
+function viewState() { try { return JSON.parse(localStorage.getItem("vc-cleared") || "{}"); } catch (e) { return {}; } }
+function saveView(v) { try { localStorage.setItem("vc-cleared", JSON.stringify(v)); } catch (e) { /* private window */ } }
+function clearView(which) {
+  const v = viewState();
+  if (which === "finished") v.finished = Date.now() / 1000;
+  else v.problems = [...new Set([...(v.problems || []), ...lastProblems.map(x => `${x.uid}|${x.reason}`)])].slice(-5000);
+  saveView(v); lastFinishedSig = ""; loadFinished(); refresh();
+}
+function showAll(which) { const v = viewState(); delete v[which]; saveView(v); lastFinishedSig = ""; loadFinished(); refresh(); }
+let finTimer = null, lastFinishedSig = "";
+function finishedSoon() { clearTimeout(finTimer); finTimer = setTimeout(loadFinished, 300); }
+async function loadFinished() {
+  let r;
+  try { r = await post("/api/finished", {q: $("fin-q").value}); } catch (e) { return; }
+  const since = viewState().finished || 0;  // "Clear list": only lines finished after it
+  r.lines = r.lines.filter(x => !since || (x.finished_at || 0) > since);
+  $("fin-all").hidden = !since;
+  const sig = JSON.stringify(r.lines.map(x => [x.uid, x.take, x.has_old, x.path]));
+  setSum("finished", r.lines.length ? `${r.lines.length}${r.lines.length >= 50 ? "+" : ""} shown · latest: ${r.lines[0].key}` : "none yet");
+  if (sig === lastFinishedSig) return;  // unchanged: keep the list (no flicker while listening)
+  lastFinishedSig = sig;
+  const when = t => {  // today: time only; older: date and time; unknown (rendered before 0.1.0b9): –
+    if (!t) return "–";
+    const d = new Date(t * 1000), today = new Date().toDateString() === d.toDateString();
+    return today ? d.toLocaleTimeString() : d.toLocaleDateString() + " " + d.toLocaleTimeString();
+  };
+  $("finished").innerHTML = r.lines.map(x =>
+    `<tr><td style="white-space:nowrap" class="sub">${when(x.finished_at)}</td><td title="${esc(hoverText(x))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}` +
+    `${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td><td>${x.take}</td>` +
+    `<td style="white-space:nowrap">${x.path ? `<button class="ghost" data-uid="${x.uid}" title="${esc(x.path)}
+(click: show in Explorer)" onclick="reveal(this)">📁</button> ` : ""}` +
+    `<button class="ghost play" data-uid="${x.uid}" title="Play the voice file" ` +
+    `onclick="playProblem(this)">▶${x.has_old ? " new" : ""}</button> ` +
+    (x.has_old ? `<button class="ghost play" data-uid="${x.uid}" data-old="1" title="Play the earlier version (before Redo)" ` +
+      `onclick="playProblem(this)">▶ old</button> <button class="ghost" data-uid="${x.uid}" data-key="${esc(x.key)}" ` +
+      `onclick="chooseVersion(this, false)">Keep new</button> <button class="ghost" data-uid="${x.uid}" ` +
+      `data-key="${esc(x.key)}" onclick="chooseVersion(this, true)">Restore old</button> ` : "") +
+    `<button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" ` +
+    `data-text="${esc(hoverText(x))}" data-raw="${esc(x.text)}" data-ex="${(x.context?.params || {}).exaggeration ?? ""}" ` +
+    `data-cfg="${(x.context?.params || {}).cfg_weight ?? ""}" title="Render this line again with a new take" onclick="redoLine(this)">Redo…</button> ` +
+    `<button class="ghost" data-uid="${x.uid}" data-key="${esc(x.key)}" title="Cut a bad sound off the start of an otherwise good take" onclick="openTrim(this)">Trim…</button> ` +
+    `<button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(realNames(x.text))}" ` +
+    `title="It passed the checks but sounds wrong and cannot be spoken well: leave it without a voice" ` +
+    `onclick="skipProblem(this).then(() => { lastFinishedSig = ''; loadFinished(); })">Skip</button></td></tr>`
+  ).join("") || `<tr><td colspan="5" class="off">No finished lines${$("fin-q").value ? " match" : " yet"}.</td></tr>`;
+}
+async function chooseVersion(btn, restoreOld) {
+  const key = btn.dataset.key;
+  if (restoreOld) {
+    if (!confirm(`Restore the earlier version of ${key}? The new take is kept as .bak.ogg (nothing is lost).`)) return;
+  } else {
+    if (!confirm(`Keep the new take of ${key}?
+
+The earlier version is deleted.`)) return;
+    if (!confirm(`Sure? The earlier version of ${key} is deleted for good.`)) return;
+  }
+  try { await post(restoreOld ? "/api/restore-old" : "/api/keep-new", {uid: Number(btn.dataset.uid)}); }
+  catch (e) { alert(e.message); }
+  lastFinishedSig = ""; loadFinished();
+}
+let trimUid = null, trimInfo = null;
+async function openTrim(btn) {
+  trimUid = Number(btn.dataset.uid); trimBuffer = null;  // a new line: decode its file again
+  try { trimInfo = await post("/api/trim-info", {uid: trimUid}); } catch (e) { alert(e.message); return; }
+  $("trim-key").textContent = btn.dataset.key;
+  $("trim-ms").max = trimInfo.duration_ms;
+  $("trim-ms").value = trimInfo.suggest_ms;
+  $("trim-box").hidden = false;
+  drawTrim();
+}
+function drawTrim() {
+  const c = $("trim-wave"), g = c.getContext("2d"), env = trimInfo.envelope, ms = Number($("trim-ms").value);
+  $("trim-ms-v").textContent = ms + " ms";
+  g.clearRect(0, 0, c.width, c.height);
+  const total = trimInfo.duration_ms, w = c.width / (total / trimInfo.step_ms);
+  env.forEach((v, i) => {
+    const h = Math.max(1, v * c.height * 0.95), x = i * w;
+    g.fillStyle = i * trimInfo.step_ms < ms ? "#9a6fbf" : "#c38cff";  // before the point a little darker
+    g.fillRect(x, (c.height - h) / 2, Math.max(1, w - 0.5), h);
+  });
+  const sx = ms / total * c.width;
+  g.fillStyle = "#ffc65c"; g.fillRect(sx - 1, 0, 2, c.height);
+  const ss = trimInfo.suggest_ms / total * c.width;
+  g.fillStyle = "#6fd49a"; g.fillRect(ss - 1, c.height - 6, 2, 6);  // green tick = suggestion
+}
+let trimCtx = null, trimBuffer = null, trimSource = null;
+async function playFromCut() {  // decoded in the browser: our server sends whole files, a seek in <audio> would not work
+  try {
+    trimCtx = trimCtx || new AudioContext();
+    if (!trimBuffer) {
+      const data = await (await fetch(`/api/problem-audio?uid=${trimUid}&t=${Date.now()}`)).arrayBuffer();
+      trimBuffer = await trimCtx.decodeAudioData(data);
+    }
+    if (trimSource) trimSource.stop();
+    trimSource = trimCtx.createBufferSource();
+    trimSource.buffer = trimBuffer;
+    trimSource.connect(trimCtx.destination);
+    trimSource.start(0, Number($("trim-ms").value) / 1000);
+  } catch (e) { alert("Cannot play this file: " + e.message); }
+}
+function closeTrim() { if (trimSource) { try { trimSource.stop(); } catch (e) { /* not playing */ } } $("trim-box").hidden = true; }
+async function applyTrim() {
+  const ms = Number($("trim-ms").value);
+  if (!ms) { alert("Move the cut first (0 ms cuts nothing)."); return; }
+  if (!confirm(`Cut the first ${ms} ms?`)) return;
+  try { await post("/api/trim", {uid: trimUid, ms}); } catch (e) { alert(e.message); return; }
+  await reopenTrim();
+}
+async function insertPause() {
+  const ms = Number($("trim-ms").value), length_ms = Number($("trim-pause").value);
+  try { await post("/api/insert-pause", {uid: trimUid, ms, length_ms}); } catch (e) { alert(e.message); return; }
+  await reopenTrim();
+}
+async function reopenTrim() {  // after a change: show the new take, so several edits can follow (each keeps a .bak)
+  trimBuffer = null;
+  try { trimInfo = await post("/api/trim-info", {uid: trimUid}); } catch (e) { closeTrim(); return; }
+  $("trim-ms").max = trimInfo.duration_ms;
+  drawTrim(); lastFinishedSig = ""; loadFinished(); refresh();
+}
+let redoUid = null, redoRaw = "";
+function redoLine(btn) {  // opens the Redo window; the settings there are for this one round only
+  redoUid = Number(btn.dataset.uid);
+  $("redo-key").textContent = btn.dataset.key;
+  $("redo-text").textContent = btn.dataset.text;
+  const ex = btn.dataset.ex === "" ? 0.5 : Number(btn.dataset.ex), cfg = btn.dataset.cfg === "" ? 0.5 : Number(btn.dataset.cfg);
+  $("redo-ex").value = ex; $("redo-ex-v").textContent = ex;
+  $("redo-cfg").value = cfg; $("redo-cfg-v").textContent = cfg;
+  $("redo-say").value = redoRaw = btn.dataset.raw || "";
+  $("redo-box").hidden = false;
+}
+async function sendRedo(withSettings) {
+  const once = withSettings ? {exaggeration: Number($("redo-ex").value), cfg_weight: Number($("redo-cfg").value)} : {};
+  const say = $("redo-say").value.trim();
+  if (withSettings && say && say !== redoRaw) once.spoken_text = say;  // only a changed text is sent
+  $("redo-box").hidden = true;
+  const resp = await fetch("/api/redo", {method: "POST", headers: H, body: JSON.stringify({uid: redoUid, once})});
+  const r = await resp.json().catch(() => ({}));
+  if (!resp.ok) alert(r.error || "could not queue this line");
+  lastFinishedSig = ""; loadFinished(); refresh();
+}
+async function resetProgress() {
+  if (!confirm("Reset the progress? Finished and failed lines, runtime and speed count from zero again. Nothing is " +
+               "deleted: finished lines, problems and voice files stay; waiting lines keep waiting.")) return;
+  await fetch("/api/progress-reset", {method: "POST", headers: H}); refresh();
+}
+async function reveal(btn) {
+  try { await post("/api/reveal", {uid: Number(btn.dataset.uid)}); } catch (e) { alert(e.message); }
 }
 let paused = false;
 async function cancelRender() {
@@ -372,11 +644,31 @@ async function refreshControls() {
   const missing = c.voices.filter(v => !v.exists).length;
   $("f-output").value = c.output_dir || "";
   $("f-output-default").hidden = c.output_dir === c.default_output;
+  // progress of a re-check: its "re-check progress: i / n checked, f failed" lines
+  const prog = [...c.task.output].reverse().map(l => l.match(/re-check progress: (\d+) \/ (\d+) checked, (\d+) failed/)).find(Boolean);
+  $("task-progress").hidden = !prog;
+  let recheckText = "";
+  if (prog) {
+    const [i, n, f] = prog.slice(1).map(Number);
+    const secs = (Date.now() / 1000 - c.task.started), left = i && c.task.running ? secs / i * (n - i) : null;
+    $("task-bar").style.width = n ? (100 * i / n) + "%" : "0";
+    recheckText = `${i} / ${n} checked · ${f} failed` + (c.task.running && left != null ? ` · ~${dur(Math.round(left))} left` : "");
+    const pb = $("task-pause");
+    pb.dataset.cmd = c.task.paused ? "resume" : "pause"; pb.textContent = c.task.paused ? "Resume" : "Pause";
+    $("task-ctl").hidden = !c.task.running;
+    const g = (c.local_gpu || [])[0];
+    $("task-gpu").textContent = g ? `This PC: ${g.name} · VRAM ${(g.memory_used_mb / 1024).toFixed(1)} / ` +
+      `${(g.memory_total_mb / 1024).toFixed(1)} GB · load ${g.utilization_pct ?? "–"} %` : "";
+    $("task-progress-text").innerHTML = (c.task.paused ? `<span class="retry"><b>paused</b></span>` : "") +
+      (c.task.stopping ? `<span class="retry"><b>stopping…</b></span>` : "") +
+      `<span>Re-check: <b>${i} / ${n}</b> checked</span>` +
+      `<span>Failed <b class="bad">${f}</b></span>` + (c.task.running && left != null ? `<span>Time left <b>${dur(Math.round(left))}</b></span>` : "");
+  }
   const task = c.task, words = (task.title || "").split(" ");
   const what = words[1] === "render" && words.includes("--dry-run") ? "dry run" : words[1] === "render" &&
     words.includes("--retry-failed") ? "retry failed" : words[1] === "story" && words.includes("--join") ? "audiobook join"
     : words[1] === "story" ? "audiobook" : words[1] || "";
-  setSum("render", !task.title ? "nothing started yet" : task.running ? `${what} · running…`
+  setSum("render", !task.title ? "nothing started yet" : task.running ? `${what} · ${recheckText || "running…"}`
     : `last: ${what} · ${task.exit_code === 0 ? "finished" : "error"}`);
   setSum("profiles", `active: ${c.profile}` + (c.bundled ? " (bundled)" : ""));
   setSum("voices", `${new Set(c.voices.map(v => v.character)).size} characters · ` +
@@ -462,6 +754,17 @@ async function pickInto(id, kind, title) {
   }
   catch (e) { $("task-err").textContent = e.message; }
 }
+async function setTakes() {
+  const n = Number($("f-takes").value);
+  try { await post("/api/takes", {takes: n}); $("task-err").textContent = ""; } catch (e) { $("task-err").textContent = e.message; }
+  refresh();
+}
+async function taskControl(cmd) {
+  if (cmd === "stop" && !confirm("Stop the re-check? It stops before the next file; the problems found so far stay " +
+                                 "in Problems. A new run starts from the beginning.")) return;
+  try { await post("/api/task-control", {cmd}); } catch (e) { alert(e.message); }
+  refreshControls();
+}
 async function chooseOutput(useDefault) {
   $("task-err").textContent = "";
   try {
@@ -479,8 +782,11 @@ async function chooseOutput(useDefault) {
 async function runTask(action) {
   $("task-err").textContent = "";
   const form = {action, lines: $("f-lines").value.trim(), texts: $("f-texts").value.trim(), engine: $("f-engine").value,
+                source: $("f-source").value.trim(),
                 only: $("f-only").value.trim(), limit: Number($("f-limit").value) || 0, all: $("f-all").checked};
   if (action === "render" && form.all && !confirm("Render again also the lines that already have a voice file?")) return;
+  if (action === "retry-failed" && !confirm(`Render all ${failedTotal} failed line(s) again (new takes)? This includes ` +
+      `lines hidden in Problems with "Clear list". For only the ones shown there use "Retry these" in Problems.`)) return;
   try { await post("/api/task", {form}); } catch (e) { $("task-err").textContent = e.message; }
   refreshControls();
 }
@@ -592,6 +898,7 @@ document.querySelectorAll("h2.fold").forEach(h => {
   });
 });
 refreshControls(); setInterval(refreshControls, 2000);
+loadFinished(); setInterval(loadFinished, 5000);
 </script>
 </body>
 </html>

@@ -61,9 +61,9 @@ def build_args(form: dict, engines: list[str], profile: str = "", output: str = 
     """Turn the page's form into crucible arguments (only known fields, each checked); `profile` = active profile,
     `output` = active voice pack folder."""
     args = _build_args(form, engines)
-    if profile and args[0] in ("render", "story") and "--retry-failed" not in args:
+    if profile and args[0] in ("render", "story", "recheck") and "--retry-failed" not in args:
         args += ["--profile", profile]
-    if output and (args[0] in ("render", "story", "report")) and "--retry-failed" not in args:
+    if output and (args[0] in ("render", "story", "report", "recheck")) and "--retry-failed" not in args:
         args += ["--output", output]
     return args
 
@@ -93,6 +93,15 @@ def _build_args(form: dict, engines: list[str]) -> list[str]:
         return ["render", "--retry-failed"]
     if action == "report":
         return ["report"]
+    if action == "recheck":
+        only = str(form.get("only") or "").strip()
+        if not _PREFIX.match(only):
+            raise TaskError("'only keys starting with' may contain letters, digits and _ only")
+        args = ["recheck"] + (["--only", only] if only else [])
+        source = _folder(form.get("source"), "folder to check", required=False)
+        if source:
+            args += ["--from", source, "--lines", _folder(form.get("lines"), "line export folder")]
+        return args
     lines = _folder(form.get("lines"), "line export folder")
     if not (Path(lines) / "english_lines.jsonl").exists():
         raise TaskError("this folder has no english_lines.jsonl – choose the plugin's export folder "
@@ -133,6 +142,18 @@ def _build_args(form: dict, engines: list[str]) -> list[str]:
     return args
 
 
+def control_file(cfg: config_mod.Config) -> Path:
+    """Pause / stop requests from the watcher for a running long task (read by `crucible recheck`)."""
+    return cfg.path(cfg.paths.work_dir) / "task_control.json"
+
+
+def read_control(cfg: config_mod.Config) -> dict:
+    try:
+        return json.loads(control_file(cfg).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 class TaskRunner:
     """Runs one crucible command at a time and keeps its last output lines for the page."""
 
@@ -150,6 +171,7 @@ class TaskRunner:
         with self._lock:
             if self._proc is not None and self._proc.poll() is None:
                 raise TaskError("another task is still running – wait until it finishes")
+            self.control({})  # a new task starts neither paused nor stopped
             self.title = "crucible " + " ".join(args)
             self.output.clear()
             self.exit_code = None
@@ -160,6 +182,15 @@ class TaskRunner:
                                           encoding="utf-8", errors="replace", creationflags=_NO_WINDOW)
             threading.Thread(target=self._read, args=(self._proc,), daemon=True).start()
 
+    def control(self, state: dict) -> None:
+        """Ask the running task to pause, resume or stop (it checks between two files)."""
+        f = control_file(self.cfg)
+        try:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(state), encoding="utf-8")
+        except OSError:
+            pass
+
     def _read(self, proc: subprocess.Popen) -> None:
         assert proc.stdout is not None
         for line in proc.stdout:
@@ -168,8 +199,10 @@ class TaskRunner:
 
     def status(self) -> dict:
         running = self._proc is not None and self._proc.poll() is None
+        state = read_control(self.cfg) if running else {}
         return {"title": self.title, "running": running, "exit_code": None if running else self.exit_code,
-                "started": self.started, "output": list(self.output)}
+                "started": self.started, "output": list(self.output), "paused": bool(state.get("pause")),
+                "stopping": bool(state.get("stop"))}
 
 
 class LocalWorker:
@@ -245,7 +278,7 @@ def pick(kind: str, title: str, start: str = "") -> str:
 class FormMemory:
     """Remembers the last form values (export folder, engine, ...) in work/watcher.json."""
 
-    KEYS = ("lines", "texts", "engine", "only", "limit", "profile", "output")
+    KEYS = ("lines", "texts", "engine", "only", "limit", "profile", "output", "takes")
 
     def __init__(self, cfg: config_mod.Config):
         self.file = cfg.path(cfg.paths.work_dir) / "watcher.json"

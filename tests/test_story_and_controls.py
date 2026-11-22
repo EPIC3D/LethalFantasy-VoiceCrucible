@@ -394,3 +394,283 @@ def test_skip_plays_the_profiles_skip_sound_when_there_is_one(tmp_path):
     assert _skip(state, job.lines[0].uid)[1]["sound"] == "skip_sound.ogg"
     assert (tmp_path / "out" / "voices" / "en" / story.PARTS_FOLDER / "PAGE_1__p002.ogg").exists()
     assert q.skipped_keys() == set()  # it has a file now: the audiobook join uses it
+
+
+def test_render_again_of_a_passed_line_makes_a_new_take(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.engines.base import seed_for
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key="K", character="C", text="Get her Lena!")])
+    job = q.claim("w", 1)
+    first = seed_for(job.lines[0])
+    q.finish(job.job_id, job.lines[0].uid, True)  # passed on take 1
+    assert q.add("test", [Line(key="K", character="C", text="Get her Lena!")], again=True) == 1
+    again = q.claim("w", 1).lines[0]
+    assert again.attempt == 2 and seed_for(again) != first  # heard: the same take came back before
+
+
+def test_finished_lines_can_be_found_heard_and_redone(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key="STATUE_5__he", character="RED", text="Get him Lena!"),
+                   Line(key="OTHER", character="RED", text="Hello")])
+    job = q.claim("w", 2)
+    for ln in job.lines:
+        q.finish(job.job_id, ln.uid, True, output=f"voices/en/RED/{ln.key}.ogg")
+    assert [x["key"] for x in q.finished("lena")] == ["STATUE_5__he"]  # search by text, any case
+    hit = q.finished("STATUE")[0]
+    assert hit["take"] == 1 and q.problem_audio(hit["uid"])[0] == "voices/en/RED/STATUE_5__he.ogg"
+    assert q.redo(hit["uid"]).key == "STATUE_5__he"
+    assert q.claim("w", 5).lines[0].attempt == 2  # a new take
+    assert q.redo(hit["uid"]) is None  # it is rendering now
+
+
+def test_a_passed_take_that_sounds_wrong_can_be_skipped(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key="TWINS_TEASER_12__p002", character="_STORY_PARTS", text='"Definitely"')])
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, True, output="voices/en/_STORY_PARTS/TWINS_TEASER_12__p002.ogg")
+    line, output = q.skip(job.lines[0].uid)  # heard: passed after 18 takes, but not good
+    assert output.endswith("p002.ogg") and q.skipped_keys() == {"TWINS_TEASER_12__p002"}
+    assert q.finished() == []
+
+
+def test_recheck_imports_a_pack_and_finds_lines_to_check(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.lethalfantasy.recheck import _find
+    from voicecrucible.watcher.tasks import build_args
+    pack = tmp_path / "game" / "voices" / "en" / "RED"
+    pack.mkdir(parents=True)
+    (pack / "STATUE_5__he.ogg").write_bytes(b"x")
+    assert _find(tmp_path / "game", "en", "RED", "STATUE_5__he") == pack / "STATUE_5__he.ogg"
+    assert _find(tmp_path / "game" / "voices" / "en", "en", "RED", "STATUE_5__he") is not None
+    q = JobQueue(tmp_path / "q.sqlite")
+    line = Line(key="STATUE_5", character="RED", text="Get him Lena!", variant="he")
+    assert q.record_existing("chatterbox", [(line, "voices/en/RED/STATUE_5__he.ogg")]) == 1
+    (done, output), = q.done_lines("STATUE")
+    q.mark_problem(done.uid, "words: words differ – heard: 'Kill him, Lena'")
+    p = q.recent_problems()[0]
+    assert p["reason"].startswith("re-check:") and p["has_audio"]  # listen, Accept, Redo or Skip in the watcher
+    export = tmp_path / "exp"
+    export.mkdir()
+    (export / "english_lines.jsonl").write_text("")
+    args = build_args({"action": "recheck", "source": str(tmp_path / "game"), "lines": str(export), "only": "BLUE"}, [])
+    assert args[:3] == ["recheck", "--only", "BLUE"] and "--from" in args and "--lines" in args
+
+
+def test_recheck_from_a_folder_checks_that_folders_file(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    line = Line(key="STATUE_5", character="RED", text="Get him Lena!", variant="he")
+    q.add("chatterbox", [line])
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, False, reason="other voice")  # in Problems already
+    assert q.done_lines() == []
+    assert q.record_existing("chatterbox", [(line, "voices/en/RED/STATUE_5__he.ogg")]) == 1
+    assert [ln.key for ln, _ in q.done_lines()] == ["STATUE_5"]  # heard: "no finished lines to check" before
+
+
+def test_recheck_accepts_a_character_folder(tmp_path):
+    from voicecrucible.lethalfantasy.recheck import _find
+    akipo = tmp_path / "voices" / "en" / "AKIPO"
+    akipo.mkdir(parents=True)
+    (akipo / "AKIPO_X.ogg").write_bytes(b"x")
+    assert _find(akipo, "en", "AKIPO", "AKIPO_X") == akipo / "AKIPO_X.ogg"
+    assert _find(akipo, "en", "RED", "BLUETWIN_Y") is None  # a Red line is not in Akipo's folder
+
+
+def test_long_task_can_be_paused_and_stopped_from_the_watcher(tmp_path):
+    from voicecrucible.core.config import Config
+    from voicecrucible.watcher.tasks import TaskRunner, read_control
+    cfg = Config(base_dir=tmp_path)
+    runner = TaskRunner(cfg)
+    runner.control({"pause": True, "stop": False})
+    assert read_control(cfg) == {"pause": True, "stop": False}
+    runner.control({"pause": False, "stop": True})
+    assert read_control(cfg)["stop"] and not read_control(cfg)["pause"]
+
+
+def test_progress_reset_counts_from_zero_but_deletes_nothing(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key=f"K{i}", character="C", text="t") for i in range(4)])
+    job = q.claim("w", 2)
+    q.finish(job.job_id, job.lines[0].uid, True)
+    q.finish(job.job_id, job.lines[1].uid, False, reason="bad")
+    assert q.progress_counts() == {"pending": 2, "leased": 0, "done": 1, "failed": 1}
+    q.reset_progress()
+    assert q.progress_counts() == {"pending": 2, "leased": 0, "done": 0, "failed": 0}
+    assert q.counts()["done"] == 1 and len(q.recent_problems()) == 1  # nothing deleted
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, True)
+    assert q.progress_counts()["done"] == 1 and q.run_times()[0] is not None
+
+
+def test_retry_only_the_problems_shown(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key=f"K{i}", character="C", text="t") for i in range(3)])
+    job = q.claim("w", 3)
+    for ln in job.lines:
+        q.finish(job.job_id, ln.uid, False, reason="bad")
+    shown = [job.lines[2].uid]  # the others were hidden with "Clear list"
+    assert q.retry_failed(shown) == 1 and q.counts() == {"pending": 1, "leased": 0, "done": 0, "failed": 2}
+    assert q.retry_failed() == 2  # the Render panel's button: all of them
+
+
+def test_takes_per_line_can_be_set_in_the_watcher(tmp_path):
+    import shutil
+    from types import SimpleNamespace
+
+    import pytest
+
+    from voicecrucible.core.config import Config
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import Controls
+    from voicecrucible.watcher.tasks import TaskError
+    shutil.copytree(Path(__file__).parents[1] / "profiles" / "lethalfantasy", tmp_path / "profiles" / "lethalfantasy")
+    cfg = Config(base_dir=tmp_path)
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=3)
+    state = SimpleNamespace(queue=q)
+    c = Controls(cfg, 5130, tmp_path / "profiles" / "lethalfantasy", root=tmp_path)
+    c.action("/api/takes", {"takes": 6}, state)
+    assert q.max_attempts == 6
+    q.add("test", [Line(key="K", character="C", text="t")])
+    for _ in range(5):  # 5 failed takes: still waiting for the 6th
+        job = q.claim("w", 1)
+        q.finish(job.job_id, job.lines[0].uid, False, reason="bad")
+    assert q.counts()["pending"] == 1
+    q2 = JobQueue(tmp_path / "q2.sqlite", max_attempts=3)
+    c.restore_takes(SimpleNamespace(queue=q2))
+    assert q2.max_attempts == 6  # remembered for the next start
+    with pytest.raises(TaskError):
+        c.action("/api/takes", {"takes": 11}, state)
+
+
+def test_after_redo_keep_new_or_restore_old(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.coordinator import results
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import _choose_version, _line_files
+    q = JobQueue(tmp_path / "q.sqlite")
+    line = Line(key="K", character="RED", text="Get him Lena!")
+    q.add("test", [line])
+    job = q.claim("w", 1)
+    first = results.save(tmp_path, "en", job.lines[0], "ogg", b"old take")
+    q.finish(job.job_id, job.lines[0].uid, True, output=first.relative_to(tmp_path).as_posix())
+    uid = job.lines[0].uid
+    q.redo(uid)
+    job = q.claim("w", 1)
+    results.save(tmp_path, "en", job.lines[0], "ogg", b"new take")  # the earlier one becomes K.bak.ogg
+    state = SimpleNamespace(queue=q, output_root=tmp_path)
+    current, old = _line_files(state, uid)
+    assert current.read_bytes() == b"new take" and old.read_bytes() == b"old take"
+    assert _choose_version(state, uid, restore_old=True)[0] == 200  # swap: nothing lost
+    assert current.read_bytes() == b"old take" and old.read_bytes() == b"new take"
+    assert _choose_version(state, uid, restore_old=False)[0] == 200  # keep what is current now, drop the other
+    assert current.read_bytes() == b"old take" and not old.exists()
+    assert _choose_version(state, uid, restore_old=False)[0] == 404
+
+
+def test_hover_context_shows_expression_and_neighbour_lines(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key=f"RED_ANGRY_FIRST_{i}", character="RED", text=f"line {i}", emotion="Angry",
+                        params={"exaggeration": 0.7}) for i in (1, 2, 10)])
+    job = q.claim("w", 3)
+    q.finish(job.job_id, job.lines[1].uid, False, reason="bad")
+    c = q.recent_problems()[0]["context"]
+    assert c["emotion"] == "Angry" and c["params"] == {"exaggeration": 0.7}
+    assert c["prev"] == "line 1" and c["next"] == "line 10"  # natural order: 2 comes before 10
+
+
+def test_redo_settings_are_for_one_round_only(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=2)
+    q.add("test", [Line(key="K", character="RED", text="Get him Lena!", params={"exaggeration": 0.7, "cfg_weight": 0.4})])
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, True, output="voices/en/RED/K.ogg")
+    uid = job.lines[0].uid
+    q.redo(uid, {"exaggeration": 0.55})
+    job = q.claim("w", 1)
+    assert job.lines[0].params == {"exaggeration": 0.55, "cfg_weight": 0.4}  # this round
+    q.finish(job.job_id, uid, False, reason="bad")
+    job = q.claim("w", 1)
+    assert job.lines[0].params["exaggeration"] == 0.55  # still this round (take 2 of 2)
+    q.finish(job.job_id, uid, True, output="voices/en/RED/K.ogg")
+    q.redo(uid)
+    assert q.claim("w", 1).lines[0].params == {"exaggeration": 0.7, "cfg_weight": 0.4}  # its own settings again
+
+
+def test_trim_cuts_a_bad_start_and_keeps_the_old_version(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.coordinator import results
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import _trim
+    sr = 24000
+    gurgle = (0.3 * np.random.default_rng(1).standard_normal(int(0.2 * sr))).astype(np.float32)
+    speech = (0.5 * np.sin(np.arange(sr) / 8)).astype(np.float32)
+    take = np.concatenate([gurgle, np.zeros(int(0.15 * sr), np.float32), speech])
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key="K", character="RED", text="Get him Lena!")])
+    job = q.claim("w", 1)
+    f = results.save(tmp_path, "en", job.lines[0], "ogg", audio.encode(take, sr))
+    q.finish(job.job_id, job.lines[0].uid, True, output=f.relative_to(tmp_path).as_posix())
+    state = SimpleNamespace(queue=q, output_root=tmp_path)
+    info = _trim(state, job.lines[0].uid, None)[1]
+    assert len(info["envelope"]) == 135 and info["duration_ms"] == 1350
+    assert _trim(state, job.lines[0].uid, 300)[0] == 200  # cut the gurgle (0-200 ms) and the gap
+    y, _ = audio.decode(f.read_bytes())
+    assert abs(len(y) / sr - (1.35 - 0.3 + audio.LEAD_IN_SECONDS)) < 0.02
+    assert f.with_name("K.bak.ogg").exists()  # the version before the cut
+    assert _trim(state, job.lines[0].uid, 99999)[0] == 400
+
+
+def test_insert_a_pause_between_sentences(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.coordinator import results
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import _insert_pause
+    sr = 24000
+    take = (0.5 * np.sin(np.arange(2 * sr) / 8)).astype(np.float32)
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key="K", character="AKIPO", text="One. Two.")])
+    job = q.claim("w", 1)
+    f = results.save(tmp_path, "en", job.lines[0], "ogg", audio.encode(take, sr))
+    q.finish(job.job_id, job.lines[0].uid, True, output=f.relative_to(tmp_path).as_posix())
+    state = SimpleNamespace(queue=q, output_root=tmp_path)
+    assert _insert_pause(state, job.lines[0].uid, 1000, 500)[0] == 200
+    y, _ = audio.decode(f.read_bytes())
+    assert abs(len(y) / sr - 2.5) < 0.02 and np.abs(y[int(1.1 * sr):int(1.4 * sr)]).max() < 0.01  # the silence
+    assert f.with_name("K.bak.ogg").exists()
+    assert _insert_pause(state, job.lines[0].uid, 1000, 9000)[0] == 400
+
+
+
+def test_redo_with_free_text_for_one_round(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.engines.base import spoken_text
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key="K", character="AKIPO", text="So tiny!", params={"exaggeration": 0.5})])
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, True, output="voices/en/AKIPO/K.ogg")
+    q.redo(job.lines[0].uid, {"spoken_text": "Sooo tiny!"})
+    line = q.claim("w", 1).lines[0]
+    assert line.text == "So tiny!" and spoken_text(line) == "Sooo tiny!"  # the subtitle text stays
+
+
+def test_recheck_from_the_game_again_keeps_your_fixed_version(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite")
+    line = Line(key="AKIPO_HOUSE_2_1", character="AKIPO", text="So tiny...")
+    q.record_existing("chatterbox", [(line, "voices/en/AKIPO/AKIPO_HOUSE_2_1.ogg")])  # imported from the game
+    assert q.made_here() == set()  # the game's file: a later import may replace it
+    (done, _), = q.done_lines()
+    q.redo(done.uid, {"spoken_text": "Oh my, so tiny!"})
+    job = q.claim("w", 1)
+    q.finish(job.job_id, done.uid, True, output="voices/en/AKIPO/AKIPO_HOUSE_2_1.ogg")  # fixed in Voice Crucible
+    assert q.made_here() == {("AKIPO_HOUSE_2_1", "AKIPO", "")}  # a re-check from the game keeps this one

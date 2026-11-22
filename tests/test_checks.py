@@ -133,3 +133,17 @@ def test_sounds_fall_back_to_the_profiles_phrase_on_the_last_take():
     assert [longer_sound('"Mm-hmm"', a, "Yes.") for a in (1, 2, 3)] == ['"Mm-hmm"', '"Mmm-hmmm..."', "Yes."]
     assert longer_sound("Ahh!", 3) == "Ahhhh..."
     assert compare('"Mm-hmm"', "Mmm hmm", {})["ratio"] == 1.0 and compare('"Mm-hmm"', "We're a good life.", {})["ratio"] == 0.0
+
+
+def test_short_lines_fail_with_one_added_word():
+    from voicecrucible.checks.words import SHORT_LINE_MATCH
+    assert compare("Get them Lena!", "Get up them, Lena.", {})["ratio"] < SHORT_LINE_MATCH  # heard: a bad start
+    assert compare("Get them Lena!", "Get them, Lena.", {})["ratio"] >= SHORT_LINE_MATCH
+    assert compare('"Definitely"', "Duh, definitely.", {})["ratio"] < SHORT_LINE_MATCH
+
+
+def test_drawn_out_words_match_the_word():
+    assert compare("Ohh Soo tiny...", "Oh, so tiny.", {})["ratio"] == 1.0  # heard: rejected before ("Soo")
+    assert compare("Sooo tiny!", "So tiny.", {})["ratio"] == 1.0
+    assert compare("That is too good", "That is too good.", {})["ratio"] == 1.0
+    assert compare("Get him Lena!", "Kittlin, Lena.", {})["ratio"] < 0.75  # real mistakes still fail

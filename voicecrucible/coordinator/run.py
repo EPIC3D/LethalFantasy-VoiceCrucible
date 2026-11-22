@@ -91,6 +91,7 @@ class RunningCoordinator:
             controls.select(controls.profile_folder.name, state)  # the profile last chosen in the watcher
         if controls is not None:
             controls.restore_output(state)  # the voice pack folder last chosen in the watcher
+            controls.restore_takes(state)  # the takes per line last set in the watcher
         self.watcher = watcher_server.make_server(state, watcher_port, controls)
         self.watcher_port = self.watcher.server_address[1]
         self.discovery = None

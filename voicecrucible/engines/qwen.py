@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 from voicecrucible.core.jobs import Line
-from voicecrucible.engines.base import Audio, Engine, OutOfMemory, seed_for
+from voicecrucible.engines.base import Audio, Engine, OutOfMemory, seed_for, spoken_text
 
 MODELS = {"design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign", "clone": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"}
 _GEN_KEYS = ("temperature", "subtalker_temperature")
@@ -79,7 +79,7 @@ class QwenEngine(Engine):
 
     def _generate(self, mode: str, language: str, group: list[Line], voices: dict[str, Path], gen: dict):
         """One batched Qwen call."""
-        texts = [ln.text for ln in group]
+        texts = [spoken_text(ln) for ln in group]
         if mode == "design":
             return self._model("design").generate_voice_design(
                 text=texts, language=language, instruct=[ln.params.get("instruct", "") for ln in group], **gen)

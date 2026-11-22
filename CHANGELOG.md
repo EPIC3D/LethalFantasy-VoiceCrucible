@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.1.0b9 – unreleased
+
+- **Edit a take** (Trim… in Finished lines and Problems): the whole waveform, ▶ from any point, **Cut before here** (a bad
+  sound at the start; a short silence and a fade-in are put back) and **Insert pause here** (0.25–1 s – a dramatic pause
+  between sentences, or a longer start). The version before each change is kept as .bak – Restore old brings it back.
+- **Redo… with your own settings for one round** – the Redo window (Finished lines and Problems) has sliders for
+  exaggeration and cfg_weight and a **spoken text** field (any text, e.g. "Sooo tiny" for "So tiny"; ↺ original
+  puts the game's text back), prefilled with the line's values; they are used for this Redo only, afterwards the
+  line has its own settings again. The line's own text (from the game's export) is never changed; the words check
+  listens for the text spoken this round, and counts drawn-out words as the word ("Sooo" = "so"). The hover text shows the line's expression, settings and the lines around it.
+- **Takes per line** can be set in the Render panel (1–10, used right away, remembered).
+- **After a Redo: compare and choose** – Finished lines shows ▶ new and ▶ old; **Keep new** deletes the earlier
+  version (asks twice), **Restore old** brings it back (the new take becomes the .bak – nothing is lost).
+- Watcher Progress: **Reset** – finished and failed lines, runtime and speed count from zero again (for a new piece
+  of work); nothing is deleted, waiting lines keep waiting. Kept in the coordinator.
+- Problems: **Retry these** renders only the failed lines shown there (not those hidden with Clear list); the Render
+  panel's "Retry failed lines" now says that it retries all of them.
+- Watcher: **Clear list** for Finished lines and Problems (only hides what is listed now – nothing is deleted; a
+  line that fails again comes back), **Show all** brings everything back. Remembered in the browser.
+- **Re-check voice files without rendering** – `crucible recheck` / Render panel "Re-check voices": today's checks on
+  the finished lines, or with `--from <folder>` ("Check files from") on any voice pack, e.g. the one in the game.
+  That folder is only read: its files are copied into the voice pack folder (a different file there is kept as
+  `.bak.ogg`) and checked there. Lines that fail go to Problems (listen, Accept, Redo, Skip). First run on the old pack in the game found
+  "Get him, Lena" heard as "Kittlin, Lena".
+  Re-checking the same folder again keeps the lines you rendered, accepted or edited in Voice Crucible since – your
+  version is checked, the folder's older file does not come back.
+  The watcher shows its progress (checked / total, failed, time left), this computer's GPU (VRAM, load), and
+  **Pause / Resume** and **Stop** (between two files; the problems found so far stay).
+- **Stricter words check for short lines** (4 words or fewer): 90 % match instead of 75 %, so one added or missing
+  word fails – heard: "Get up them, Lena" and "Duh, definitely" passed before.
+- Finished lines: **Skip** also for a take that passed the checks but sounds wrong.
+- Finished lines and Problems: **📁** shows the voice file's full path (hover) and opens it in Explorer (click).
+- **Watcher: Finished lines** – listen to the lines that passed (newest first), search by key or text, see which take
+  it was; **Redo** renders one line again with a new take (the current file is kept as `.bak.ogg`).
+- Fix: "Render again" on a line that had passed rendered the very same take again (its take number did not move
+  on); it now makes a new take.
+- The voice-similarity reason shows 3 decimals ("0.720 < 0.72" was shown as "0.72 < 0.72").
+
 ## 0.1.0b8 – 2026-11-22
 
 Tested on Windows 11 with an NVIDIA RTX 40 series card (coordinator, watcher and worker on one PC), against

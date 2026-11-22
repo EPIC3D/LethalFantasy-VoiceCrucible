@@ -70,3 +70,9 @@ def seed_for(line: Line) -> int:
     """Deterministic seed per line and attempt: the same take is reproducible, a retry sounds different."""
     import zlib
     return zlib.crc32(line.file_stem.encode()) + 1000 * (line.attempt - 1)
+
+
+def spoken_text(line: Line) -> str:
+    """What the engine says: the line's text, or a one-round text from the watcher's Redo ("Sooo tiny" for "So tiny").
+    Subtitles and the words check always use the line's own text."""
+    return str(line.params.get("spoken_text") or line.text)

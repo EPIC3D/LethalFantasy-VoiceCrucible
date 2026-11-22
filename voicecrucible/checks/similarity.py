@@ -45,7 +45,7 @@ class SimilarityCheck(Check):
             limit = min(limit, SPEECHLESS_LIMIT)
         elif len(take.audio16k) < SHORT_CLIP_SECONDS * 16000:  # little sound = an unsteady voice print (heard: good
             limit = round(limit - SHORT_CLIP_MARGIN, 2)       # "Look at that!" scored 0.76); words still checked
-        return CheckResult(self.name, sim >= limit, f"other voice ({sim:.2f} < {limit})" if sim < limit else "",
+        return CheckResult(self.name, sim >= limit, f"other voice ({sim:.3f} < {limit})" if sim < limit else "",
                            round(sim, 3))
 
 
