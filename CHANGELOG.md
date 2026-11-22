@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.1.0b7 – unreleased
+## 0.1.0b7 – 2026-11-22
+
+Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards (a remote worker updated itself from 0.1.0b5
+to 0.1.0b6 via the watcher), against LethalFantasy beta 1.0.3.
 
 - **Cancel render:** a button in the watcher (and `crucible render --cancel`) removes the waiting and rendering
   lines; workers stop their current batch, finished voice files are kept.
