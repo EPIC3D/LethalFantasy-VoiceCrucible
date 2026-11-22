@@ -46,7 +46,7 @@ a wrong name are caught and rendered again.*
 3. Export the game's lines with the plugin (`[Developer] ExportLines = true`, play until the first dialogue
    line appears).
 4. Run `coordinator.cmd` and `watcher.cmd`. In the watcher: **Pair and start worker on this PC**, choose the
-   export folder (`<game>\BepInEx\LFTTS-export`) and **Start rendering**.
+   export folder (`<game>\BepInEx\LFTTS-export`) and **Start rendering**. (old path was (`<game>\BepInEx\LethalFantasyTTS`)
 5. The pack is in `output\voices\`; **Report** lists lines with problems.
 
 Everything also works on the command line: `crucible.cmd render --lines ...` (see docs/INSTALL.md).
