@@ -236,14 +236,15 @@ def _bye(state: CoordinatorState, worker: str, body: dict, _address: str) -> tup
     return 200, {"ok": True}
 
 
-def _export_best_take(state: CoordinatorState, line) -> None:
+def _export_best_take(state: CoordinatorState, line, accepted: bool = False) -> None:
     """A line failed every attempt: export its best take anyway (like the original pipeline) and note it."""
     best = state.queue.best_take(line.uid)
     if not best or not Path(best).exists():
         return
     path = results.save(state.output_root, state.language, line, Path(best).suffix.lstrip("."), Path(best).read_bytes())
     state.queue.set_output(line.uid, path.relative_to(state.output_root).as_posix())
-    _log.info("%s failed every check – best take exported, listed in the report", line.file_stem)
+    if not accepted:
+        _log.info("%s failed every check – best take exported, listed in the report", line.file_stem)
 
 
 def _release(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:

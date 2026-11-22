@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-COPY = ("emotions.json", "expressions.json", "pronunciation.json")
+COPY = ("emotions.json", "expressions.json", "pronunciation.json", "sound_fallbacks.json")
 
 
 def export(src: Path, dst: Path) -> None:
@@ -55,6 +55,8 @@ def export(src: Path, dst: Path) -> None:
         for voice in json.loads(story.read_text(encoding="utf-8")).get("voices", {}).values():
             (dst / voice).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src / voice, dst / voice)
+    for skip in sorted((src / "voices").glob("skip_sound.*")):  # played for skipped lines (now: a silent placeholder)
+        shutil.copyfile(skip, dst / "voices" / skip.name)
     print(f"default profile written to {dst}:", ", ".join(sorted(p.name for p in dst.rglob("*") if p.is_file())))
 
 

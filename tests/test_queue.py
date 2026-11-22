@@ -52,7 +52,10 @@ def test_retry_failed_gives_fresh_attempts(tmp_path):
     job = q.claim("w1", 1)
     q.finish(job.job_id, job.lines[0].uid, False, "broken")
     assert q.counts()["failed"] == 1 and q.retry_failed() == 1
-    assert q.counts()["failed"] == 0 and q.claim("w1", 1).lines[0].attempt == 1
+    again = q.claim("w1", 1)  # fresh attempts, but take 2 (a new seed – take 1 would sound exactly the same)
+    assert q.counts()["failed"] == 0 and again.lines[0].attempt == 2
+    q.finish(again.job_id, again.lines[0].uid, False, "broken")
+    assert q.counts()["failed"] == 1  # max_attempts counts per round again
 
 
 def test_release_without_counting(tmp_path):

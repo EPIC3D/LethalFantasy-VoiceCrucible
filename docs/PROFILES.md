@@ -25,6 +25,17 @@ Don't edit it – make a copy instead. If you did change it anyway, the update f
 
 ## Your own profile
 
+**In the watcher** (easiest):
+
+- **Profiles** panel: **Use** switches the active profile (remembered, no config edit), **Make my own copy**,
+  **Import profile…** (a shared profile zip), **Open folder** (edit the files by hand).
+- **Voices** panel: listen to each character's reference clip; **Replace…** takes a clip you choose (5–30 s of
+  clean speech of one voice, no music; wav, flac, ogg or mp3) and makes it that character's reference voice. The
+  old clip is kept as `<name>.bak.wav`. On the bundled profile it first makes your own copy and switches to it,
+  because program updates replace the bundled one.
+
+**On the command line:**
+
 - **Copy the default and change it:** `crucible.cmd profile new my-voices --from lethalfantasy`
 - **Start empty:** `crucible.cmd profile new my-voices` (from the template; the speakers are added from the
   game export when you run `render --dry-run`, voice pack folders come from `plugin_folders.json`)
@@ -54,10 +65,11 @@ reference clip.
 | `profile.json` | name, title, version |
 | `characters.json` | speakers: voice pack folder, key prefix, reference clip per engine, acting description, Chatterbox adjustment |
 | `plugin_folders.json` | game speaker ID → the plugin's voice pack folder (used when speakers are added automatically) |
-| `voices\` | reference clips |
+| `voices\` | reference clips; optional `skip_sound.wav` (or .ogg/.mp3/.flac): played for lines you skip in the watcher instead of silence – e.g. crickets. Not bundled: use a sound whose licence allows your use. |
 | `emotions.json` | game expression → engine settings (Chatterbox sliders, Qwen styles), words replaced in directions |
 | `expressions.json` | what each game expression means for the acting |
 | `pronunciation.json` | name respellings for the engines (subtitles stay unchanged) |
+| `sound_fallbacks.json` | optional: for lines without words (a hum, a laugh, a sigh) – what the last take says if the engine cannot make the sound, e.g. "Mm-hmm" → "Yes.", "Hehe…" → "That is funny!", "Ahhh" with a happy expression → "Feels good…". Rules match the sound, optionally the ending (`?`) and the game's expression. English packs only. |
 | `director_brief.md` | instructions and character notes for an AI director |
 
 ## Re-rendering after a change

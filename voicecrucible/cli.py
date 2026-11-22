@@ -63,13 +63,17 @@ def build_parser() -> argparse.ArgumentParser:
                    "(finished voice files are kept)")
     r.add_argument("--test", type=int, metavar="N", help="queue N test lines (beep engine, no model needed)")
     r.add_argument("--profile", default="", help="profile to use instead of [render] profile")
+    r.add_argument("--output", default="", help="voice pack folder to use instead of [paths] output_dir")
     st = cmds["story"]
     st.add_argument("--lines", type=Path, required=True, help="folder with the plugin's line export")
     st.add_argument("--texts", type=Path, help="page texts in another language (default: the export's English)")
     st.add_argument("--join", action="store_true", help="join the rendered parts into STORY/<page>.ogg")
+    st.add_argument("--only", default="", help="only parts whose key starts with this, e.g. TWINS_TEASER_10__p005")
     st.add_argument("--all", action="store_true", help="also parts that are already rendered; with --join: replace "
                     "existing pages (old ones kept as .bak.ogg)")
     st.add_argument("--profile", default="", help="profile to use instead of [render] profile")
+    st.add_argument("--output", default="", help="voice pack folder to use instead of [paths] output_dir")
+    cmds["report"].add_argument("--output", default="", help="voice pack folder (default: [paths] output_dir)")
     s = cmds["setup"]
     s.add_argument("--components", default="", help="comma-separated, e.g. checks,chatterbox,qwen,seedvc "
                    "(default: asked; see downloads.toml)")
@@ -117,6 +121,9 @@ def main(argv: list[str] | None = None) -> int:
             cfg.base_dir = layout.ROOT
         if getattr(args, "profile", ""):  # render/story --profile: this run only, the config file is not changed
             cfg.render.profile = args.profile
+        if getattr(args, "output", ""):  # render/story --output: this run only
+            cfg.paths.output_dir = str(Path(args.output).resolve())
+            config_mod.validate(cfg)  # e.g. never inside the game's BepInEx folder
     except (OSError, config_mod.ConfigError) as e:
         print(f"Config error: {e}", file=sys.stderr)
         return 2

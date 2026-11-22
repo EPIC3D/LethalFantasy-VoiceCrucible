@@ -46,3 +46,8 @@ Then the watcher's **Update workers** button asks those workers to update themse
 downloads the release itself and checks its signature – the coordinator sends no code. A worker updates
 between two jobs and restarts on its own. Update the **coordinator last** (`crucible.cmd update` warns if a
 worker is still on an older version).
+
+**Start the worker with `worker.cmd`** (not `crucible.cmd worker`): only `worker.cmd` starts it again after an
+update. A worker started with `crucible.cmd worker` closes after updating and has to be started by hand.
+Updating *to* 0.1.0b8 may still need one manual start: the restart fix is in the 0.1.0b8 launchers, and the
+update runs with the old ones.

@@ -23,6 +23,9 @@ class QualityCheck(Check):
         self._model = torch.hub.load(_HUB_REPO, "utmos22_strong", trust_repo=True).to(device).eval()
 
     def run(self, take: Candidate) -> CheckResult:
+        from voicecrucible.checks.words import speechless
+        if speechless(take.line.text):  # the speech-quality model rates any hum as poor (heard good hums: MOS 1.3-1.9)
+            return CheckResult(self.name, True, "", None)
         with self._torch.no_grad():
             wave = self._torch.from_numpy(take.audio16k).unsqueeze(0).to(self._device)
             mos = float(self._model(wave, CHECK_RATE).item())

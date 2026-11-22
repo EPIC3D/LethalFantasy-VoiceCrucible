@@ -84,10 +84,13 @@ def new_profile(name: str, root: Path = layout.ROOT, source: str = "template") -
     meta = json.loads((target / "profile.json").read_text(encoding="utf-8"))
     meta.update(name=name, title=name, version="1.0.0", description=f"Created from '{source}'.")
     (target / "profile.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    chars = json.loads((target / "characters.json").read_text(encoding="utf-8"))
     if source == "template":  # empty start: speakers are added from the game export
-        chars = json.loads((target / "characters.json").read_text(encoding="utf-8"))
         chars = {k: v for k, v in chars.items() if k.startswith("_")}
-        (target / "characters.json").write_text(json.dumps(chars, indent=2) + "\n", encoding="utf-8")
+    if source in BUNDLED and "_comment" in chars:  # the copy is the user's own: no "do not edit" note
+        chars["_comment"] = (f"Your own profile (copied from '{source}'); edit freely, program updates never change it. "
+                             "folder = the plugin's voice pack folder; voices = reference clip per engine.")
+    (target / "characters.json").write_text(json.dumps(chars, indent=2) + "\n", encoding="utf-8")
     for engine in ("chatterbox", "acting"):
         (target / "voices" / engine).mkdir(parents=True, exist_ok=True)
     return target

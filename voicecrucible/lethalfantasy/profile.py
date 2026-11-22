@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from voicecrucible.textprep.fallback import SoundFallbacks
 from voicecrucible.textprep.pronounce import Lexicon
 
 
@@ -31,6 +32,7 @@ class Profile:
     expressions: dict[str, str]  # expression -> acting meaning
     emotions: dict
     lexicon: Lexicon
+    sounds: SoundFallbacks = field(default_factory=lambda: SoundFallbacks([]))  # sound_fallbacks.json (optional)
 
     def voice(self, character: str, engine: str) -> Path | None:
         """Reference voice of a character for an engine (the acting reference for qwen_vc), if any."""
@@ -84,4 +86,4 @@ def load(folder: Path) -> Profile:
                                 chatterbox_adjust=tuple(c.get("chatterbox_adjust", (0.0, 0.0))))
     expressions = {k: v.get("meaning", "") for k, v in _json(folder / "expressions.json").items() if isinstance(v, dict)}
     return Profile(folder, chars, expressions, _json(folder / "emotions.json"),
-                   Lexicon.load(folder / "pronunciation.json"))
+                   Lexicon.load(folder / "pronunciation.json"), SoundFallbacks.load(folder / "sound_fallbacks.json"))

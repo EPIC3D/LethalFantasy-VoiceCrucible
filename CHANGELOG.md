@@ -1,6 +1,56 @@
 # Changelog
 
-## 0.1.0b7 – 2026-11-22
+## 0.1.0b8 – unreleased
+
+- **Fix: a worker did not start again after updating itself** (seen 0.1.0b6 → 0.1.0b7): the update replaced
+  `worker.cmd` while it was running, and Windows then read the rest of the file from the wrong place. The restart
+  loop now runs from a temporary copy, and `crucible.cmd` ends on the same line as the program. Start workers
+  with `worker.cmd` (not `crucible.cmd worker`) – only it restarts them. Updating to this version may need one
+  manual start (the update runs with the old launchers).
+- **Watcher: foldable panels** – click a heading to fold a panel to one line with a short summary (workers online,
+  active profile, files per folder, the latest problem, ...); remembered in the browser.
+- **Watcher: voice pack folder** – "Voice pack (written to)" can be changed in the Render panel (never inside the
+  game's BepInEx folder, not while lines are rendering) and is remembered; `render|story|report --output <folder>`.
+  The input is now called "Game lines (read from)" so it is not mistaken for a target.
+- **Watcher help:** a "?" on every panel explains it (hover) and opens the matching guide on GitHub; Help, FAQ and
+  Troubleshooting links at the top.
+- **Watcher: Replace… on the bundled profile** makes your own copy first (updates replace the bundled one) and puts
+  your clip there; "Show voices for" filters the Voices panel by engine; dark dropdown lists.
+- Fix: after an update the watcher page could be newer than the running coordinator (buttons answered "not found",
+  fields showed "undefined"); the coordinator now serves the page it started with.
+- **Fix: good takes with a respelled name were rejected** – the words check compared the name's short form
+  ('sel') with what Whisper heard ('selena'), so "Seleena added." scored 50 %. Short clips (under 2 s) get a
+  slightly lower voice-similarity limit (0.72 instead of 0.80): their voice print is unsteady.
+- **Watcher: what the export holds** – under "Game lines" the watcher shows the number of texts, dialogue lines
+  per speaker and type, and the expressions (emotions) found (hover for each one's count).
+- **Fix: "Retry failed lines" rendered exactly the same takes again** (the take number, and with it the seed,
+  started at 1 again). A retried line now continues with new takes (take 4, 5, ...).
+- **Fix: "Render again" (`--all`) did nothing for lines already in the queue** – they were skipped as "already
+  queued". They are now queued once more with their new text and settings (after a pronunciation or profile
+  change), with new takes. The audiobook gets "only keys starting with" too (`story --only`).
+- Chatterbox: one- and two-word lines ("Mm-hmm", "Definitely") are rendered with calmer settings (exaggeration at
+  most 0.5, cfg_weight at least 0.5) – strong emotion settings turned them into noise.
+- Interjections the engines read as letters are spelled out: "Mhm" -> "Mm-hmm", "Hm" -> "Hmm", "Uhhuh" ->
+  "Uh-huh" (heard: a Twin's "Mhm" came out as noise).
+- **Problems: ▶ play** the take of a line that failed a check (the best take so far, or the one exported).
+  **Accept** marks it done by hand when the take is fine (it becomes the line's voice file and is not rendered
+  again).
+  **Skip** leaves a line that cannot be spoken well (e.g. a hum) without a voice: the game shows it silently, the
+  audiobook join leaves the part out; an exported take is renamed to `.skipped.ogg`. "Render again" brings it back.
+  Optional: put your own `voices\skip_sound.wav` (or .ogg/.mp3/.flac) into the profile – e.g. crickets – and
+  skipped lines play it instead of silence. The bundled profile has a 1-second silent placeholder; replace it with
+  a sound whose licence allows your use.
+- **Lines without words** (a hum, a laugh, a sound: "Mm-hmm", "Hehehe~", "Ahh!"): each retry stretches the sound
+  ("Mm-hmm" -> "Mmm-hmmm..." -> "Mmmm-hmmmm...", heard: the quick one came out as noise, the long one sounded
+  human); the speech-quality score is not used for them (it rates every hum as poor) and the voice-similarity limit
+  is 0.50 (good hums measured 0.52-0.62, noise 0.43).
+  If the sound did not work, the last take says a short phrase with the same meaning, from the profile's new
+  `sound_fallbacks.json` (editable): "Mm-hmm" -> "Yes.", "Hmm?" -> "Yes?", "Hmm..." -> "I wonder...", "Hehe" ->
+  "That is funny!", "Ahhh" with a happy expression -> "Feels good..."; pain or shock gets no phrase. The subtitle
+  never changes.
+- Interjection spellings and other English-only text rules are used for English packs only.
+- **Diagnose button** in the watcher (Output panel): collects the bug report facts of this computer (personal data
+  removed), shows them and downloads them as `voicecrucible-diagnose.txt`.
 
 Tested on Windows 11 with NVIDIA RTX 40 and RTX 50 series cards (a remote worker updated itself from 0.1.0b5
 to 0.1.0b6 via the watcher), against LethalFantasy beta 1.0.3.

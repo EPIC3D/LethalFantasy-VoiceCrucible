@@ -84,7 +84,13 @@ def render(cfg: Config, args: argparse.Namespace) -> int:
                      "(file names are set in characters.json; see docs/PROFILES.md).",
                      ", ".join(sorted(result.missing_voices)), profile.folder / "voices" / engine.replace("qwen_vc", "acting"))
     if not result.lines:
-        _log.error("nothing to queue")
+        from voicecrucible.lethalfantasy import story as story_mod
+        scfg = story_mod.load_config(profile.folder)
+        if args.only and scfg is not None and (args.only.startswith(scfg.prefix) or scfg.prefix.startswith(args.only)):
+            _log.error("nothing to queue: '%s' is an audiobook page – use 'Audiobook: queue pages' in the watcher "
+                       "(crucible story --lines <export> --only %s)", args.only, args.only)
+        else:
+            _log.error("nothing to queue")
         return 1
     lines_to_queue = result.lines
     if not args.all:  # extend a pack: lines that already have a voice file are not rendered again
@@ -102,7 +108,7 @@ def render(cfg: Config, args: argparse.Namespace) -> int:
         _log.info("dry run: %d line(s) would be queued for engine '%s'", len(queued), engine)
         return 0
     queue = JobQueue(folder / "queue.sqlite", max_attempts=cfg.checks.max_attempts)
-    added = queue.add(engine, queued)
+    added = queue.add(engine, queued, again=args.all)
     queue.close()
     _log.info("%d line(s) queued for engine '%s' (%d were already queued)", added, engine, len(queued) - added)
     return 0
@@ -123,13 +129,17 @@ def story(cfg: Config, args: argparse.Namespace) -> int:
         return 1
     folder = cfg.path(cfg.paths.work_dir) / "coordinator"
     try:
-        parts = story_mod.build_lines(pages, scfg, profile.lexicon, AssetStore(folder / "assets").add)
+        parts = story_mod.build_lines(pages, scfg, profile.lexicon, AssetStore(folder / "assets").add,
+                                      cfg.render.language, profile.sounds)
     except FileNotFoundError as e:
         _log.error("%s", e)
         return 1
     output_root, lang = cfg.path(cfg.paths.output_dir), cfg.render.language
     if args.join:
-        joined, missing = story_mod.join_pages(output_root, lang, scfg, parts, replace=args.all)
+        queue = JobQueue(folder / "queue.sqlite")
+        skipped = queue.skipped_keys()
+        queue.close()
+        joined, missing = story_mod.join_pages(output_root, lang, scfg, parts, replace=args.all, skipped=skipped)
         kept = len({ln.key.rsplit("__p", 1)[0] for ln in parts}) - len(joined) - len(missing)
         if kept:
             _log.info("%d page(s) already exist and were kept (maybe edited by hand) – --all replaces them, "
@@ -138,9 +148,12 @@ def story(cfg: Config, args: argparse.Namespace) -> int:
             _log.warning("%s not ready – %d part(s) missing", page, len(absent))
         _log.info("%d page(s) written to %s", len(joined), output_root / "voices" / lang / scfg.folder)
         return 0 if not missing else 1
-    todo = parts if args.all else [ln for ln in parts if not _has_output(output_root, lang, ln)]
+    only = getattr(args, "only", "") or ""
+    todo = [ln for ln in parts if ln.key.startswith(only)]
+    if not args.all:
+        todo = [ln for ln in todo if not _has_output(output_root, lang, ln)]
     queue = JobQueue(folder / "queue.sqlite", max_attempts=cfg.checks.max_attempts)
-    added = queue.add("chatterbox", todo)
+    added = queue.add("chatterbox", todo, again=args.all)
     queue.close()
     _log.info("audiobook: %d page(s), %d part(s); %d queued (%d already rendered). When they are done: "
               "crucible story --lines <export> --join", len(pages), len(parts), added, len(parts) - len(todo))

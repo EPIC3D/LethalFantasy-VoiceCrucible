@@ -32,16 +32,20 @@ CREATE TABLE IF NOT EXISTS lines (
 CREATE INDEX IF NOT EXISTS idx_lines_status ON lines (status);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v REAL);
 """
-_ADDED_COLUMNS = {"best_take": "TEXT NOT NULL DEFAULT ''", "best_score": "REAL NOT NULL DEFAULT -1"}
+_ADDED_COLUMNS = {"best_take": "TEXT NOT NULL DEFAULT ''", "best_score": "REAL NOT NULL DEFAULT -1",
+                  # takes of earlier rounds (Retry failed): the next take numbers – and seeds – continue after them,
+                  # so a retried line does not render the very same take again
+                  "takes_before": "INTEGER NOT NULL DEFAULT 0",
+                  "skipped": "INTEGER NOT NULL DEFAULT 0"}  # done without a voice (Skip in the watcher)
 
 STATUSES = ("pending", "leased", "done", "failed")
-_LINE_COLUMNS = "uid, key, character, variant, text, emotion, direction, voice, params, attempts"
+_LINE_COLUMNS = "uid, key, character, variant, text, emotion, direction, voice, params, attempts, takes_before"
 
 
 def _line(r: tuple) -> Line:
     """Build a Line from a row selected with _LINE_COLUMNS."""
     return Line(key=r[1], character=r[2], variant=r[3], text=r[4], emotion=r[5], direction=r[6], uid=r[0],
-                voice=r[7], params=json.loads(r[8]), attempt=r[9] + 1)
+                voice=r[7], params=json.loads(r[8]), attempt=r[10] + r[9] + 1)
 
 
 class JobQueue:
@@ -65,15 +69,30 @@ class JobQueue:
         """Close the database file."""
         self._db.close()
 
-    def add(self, engine: str, lines: list[Line]) -> int:
-        """Queue lines for an engine; lines already queued for that engine are skipped. Returns the number added."""
+    def add(self, engine: str, lines: list[Line], again: bool = False) -> int:
+        """Queue lines for an engine; lines already queued for that engine are skipped. Returns the number added.
+
+        `again` (render --all): lines already in the queue are queued once more with their new text and settings
+        (e.g. after a pronunciation or profile change); their next takes get new seeds. Lines rendering right now
+        are left alone."""
         rows = [(ln.key, ln.character, ln.variant, ln.text, ln.emotion, ln.direction, ln.voice, json.dumps(ln.params),
                  engine) for ln in lines]
         with self._lock:
             before, idle = self._count_locked(), self._remaining_locked() == 0
-            self._db.executemany("INSERT OR IGNORE INTO lines (key, character, variant, text, emotion, direction, voice,"
-                                 " params, engine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
-            added = self._count_locked() - before
+            changes_before = self._db.total_changes
+            if again:
+                self._db.executemany(
+                    "INSERT INTO lines (key, character, variant, text, emotion, direction, voice, params, engine)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (key, character, variant, engine) DO UPDATE SET"
+                    " text = excluded.text, emotion = excluded.emotion, direction = excluded.direction,"
+                    " voice = excluded.voice, params = excluded.params, status = 'pending',"
+                    " takes_before = takes_before + attempts, attempts = 0, reason = '', output = '',"
+                    " best_take = '', best_score = -1, skipped = 0 WHERE status != 'leased'", rows)
+                added = self._db.total_changes - changes_before
+            else:
+                self._db.executemany("INSERT OR IGNORE INTO lines (key, character, variant, text, emotion, direction,"
+                                     " voice, params, engine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+                added = self._count_locked() - before
             if added and idle:
                 self._new_run_locked()
             return added
@@ -138,8 +157,9 @@ class JobQueue:
         """Put every line that failed for good back into the queue with fresh attempts. Returns how many."""
         with self._lock:
             idle = self._remaining_locked() == 0
-            cur = self._db.execute("UPDATE lines SET status = 'pending', attempts = 0, reason = '', output = '',"
-                                   " best_take = '', best_score = -1 WHERE status = 'failed'")
+            cur = self._db.execute("UPDATE lines SET status = 'pending', takes_before = takes_before + attempts,"
+                                   " attempts = 0, reason = '', output = '', best_take = '', best_score = -1"
+                                   " WHERE status = 'failed'")
             if cur.rowcount and idle:
                 self._new_run_locked()
             return cur.rowcount
@@ -172,6 +192,40 @@ class JobQueue:
         with self._lock:
             r = self._db.execute("SELECT best_take FROM lines WHERE uid = ?", (uid,)).fetchone()
         return r[0] if r else ""
+
+    def accept(self, uid: int) -> Line | None:
+        """Accept a problem line by hand (its take was heard and is fine): mark it done and drop its failure reason.
+        Only lines that failed for good or wait for a retry and have a take; returns the line (None if refused)."""
+        with self._lock:
+            r = self._db.execute(f"SELECT {_LINE_COLUMNS} FROM lines WHERE uid = ? AND status IN ('failed', 'pending')"
+                                 " AND reason != '' AND (output != '' OR best_take != '')", (uid,)).fetchone()
+            if r is None:
+                return None
+            self._db.execute("UPDATE lines SET status = 'done', reason = '', lease_id = NULL, lease_until = NULL"
+                             " WHERE uid = ?", (uid,))
+            return _line(r)
+
+    def skip(self, uid: int) -> tuple[Line, str] | None:
+        """Leave a problem line without a voice (it cannot be spoken well, e.g. a hum): done, no file. Returns the
+        line and its exported output path (to be moved away), or None when refused (rendering right now)."""
+        with self._lock:
+            r = self._db.execute(f"SELECT {_LINE_COLUMNS}, output FROM lines WHERE uid = ?"
+                                 " AND status IN ('failed', 'pending', 'done') AND reason != ''", (uid,)).fetchone()
+            if r is None:
+                return None
+            self._db.execute("UPDATE lines SET status = 'done', reason = '', output = '', skipped = 1,"
+                             " lease_id = NULL, lease_until = NULL WHERE uid = ?", (uid,))
+            return _line(r[:-1]), r[-1]
+
+    def mark_spoken(self, uid: int, output: str) -> None:
+        """A skipped line got a file after all (the profile's skip sound): done with this output, not skipped."""
+        with self._lock:
+            self._db.execute("UPDATE lines SET skipped = 0, output = ? WHERE uid = ?", (output, uid))
+
+    def skipped_keys(self) -> set[str]:
+        """Keys of the lines that were skipped (left without a voice)."""
+        with self._lock:
+            return {r[0] for r in self._db.execute("SELECT key FROM lines WHERE skipped = 1")}
 
     def set_output(self, uid: int, output: str) -> None:
         """Record the exported file of a line that failed every check (its best take)."""
@@ -216,10 +270,17 @@ class JobQueue:
     def recent_problems(self, limit: int = 20) -> list[dict[str, str]]:
         """Lines with a failure reason (failed for good, or waiting for a retry), newest first."""
         with self._lock:
-            rows = self._db.execute("SELECT key, character, variant, status, attempts, reason, output FROM lines"
-                                    " WHERE reason != '' ORDER BY uid DESC LIMIT ?", (limit,)).fetchall()
+            rows = self._db.execute("SELECT key, character, variant, status, attempts, reason, output, uid, best_take,"
+                                    " text FROM lines WHERE reason != '' ORDER BY uid DESC LIMIT ?", (limit,)).fetchall()
         return [{"key": r[0], "character": r[1], "variant": r[2], "status": r[3], "attempts": r[4], "reason": r[5],
-                 "best_take_used": bool(r[6])} for r in rows]
+                 "best_take_used": bool(r[6]), "uid": r[7], "has_audio": bool(r[6] or r[8]), "text": r[9]}
+                for r in rows]
+
+    def problem_audio(self, uid: int) -> tuple[str, str]:
+        """(exported output path relative to the output folder, best failed take path) of one line."""
+        with self._lock:
+            r = self._db.execute("SELECT output, best_take FROM lines WHERE uid = ?", (uid,)).fetchone()
+        return ("", "") if r is None else (r[0], r[1])
 
     def _count_locked(self) -> int:
         """Total number of lines (caller holds the lock)."""

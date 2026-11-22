@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from voicecrucible.checks.words import speechless
 from voicecrucible.core import languages
 from voicecrucible.core.jobs import Line
 from voicecrucible.lethalfantasy import emotions, filters, naming
@@ -59,11 +60,14 @@ def build(profile: Profile, source: list[SourceLine], engine: str, directions: d
         params = {**emotions.params(engine, profile, src.character, src.expression, directions.get(src.key)),
                   **engine_language}
         for variant, text in naming.variants(src.text):
-            spoken = prepare(text, profile.lexicon)
+            spoken = prepare(text, profile.lexicon, language=language)
             if not has_words(spoken):
                 result.skip("nothing to speak (only symbols)")
                 continue
+            line_params = params
+            if language == "en" and (say := profile.sounds.find(spoken, src.expression)) and speechless(spoken):
+                line_params = {**params, "last_take_text": say}  # a hum or a laugh: its last take says this
             result.lines.append(Line(key=src.key, character=ch.folder, text=spoken, emotion=src.expression,
                                      direction=directions.get(src.key, {}).get("delivery", ""), variant=variant,
-                                     voice=asset_ids.get(ref, ""), params=params))
+                                     voice=asset_ids.get(ref, ""), params=line_params))
     return result

@@ -56,6 +56,8 @@ because another component requires the old version:
 | accelerate 1.12.0 | no fixed version exists yet | Path traversal when loading an untrusted checkpoint; same as above. |
 | setuptools 81 | PyTorch 2.11 requires < 82 | Only used while installing packages; Voice Crucible installs only the pinned packages from `uv.lock`. |
 | protobuf 3.19.6 (Seed-VC only) | Seed-VC's audio codec library requires < 3.20 | Affects parsing untrusted protobuf / JSON data; Seed-VC only reads its own model files. |
+| torch 2.11.0 | the newest PyTorch build for CUDA 12.8 that all engines run on | Memory corruption in `torch.jit.script` with a crafted script; Voice Crucible never compiles scripts from outside. |
+| gradio, starlette, fastapi | **not installed** | They are listed in `uv.lock` because Chatterbox names gradio (its demo web page) as a dependency, but the project excludes them (`sys_platform == 'never'` in `pyproject.toml`), so they are never installed on any computer. Dependabot reads the lock file without these markers. |
 
 These will be updated as soon as the components that pin them allow it.
 

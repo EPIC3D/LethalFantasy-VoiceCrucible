@@ -9,6 +9,18 @@
   * { box-sizing: border-box; }
   body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
   h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 8px; color:var(--accent); }
+  h2.fold { cursor:pointer; user-select:none; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  h2.fold::before { content:"▾"; color:var(--muted); width:10px; }
+  .panel.collapsed h2.fold { margin:0; } .panel.collapsed h2.fold::before { content:"▸"; }
+  .panel.collapsed > :not(h2) { display:none !important; }
+  a.help { margin-left:auto; display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
+           border-radius:50%; border:1px solid var(--muted); color:var(--muted); font-size:12px; font-weight:600;
+           text-decoration:none; flex:none; }
+  a.help:hover { color:var(--accent); border-color:var(--accent); }
+  h2.plain { display:flex; align-items:baseline; }
+  .toplinks { float:right; font-size:13px; } .toplinks a { color:var(--accent); margin-left:12px; }
+  h2 .sum { color:var(--muted); font-size:12px; font-weight:400; display:none; }
+  .panel.collapsed h2 .sum { display:inline; }
   .sub { color:var(--muted); font-size:12px; margin-bottom:16px; }
   .panel { background:var(--panel); border-radius:10px; padding:14px; margin-bottom:14px; overflow-x:auto; }
   .bar { height:12px; background:#0004; border-radius:6px; overflow:hidden; margin:8px 0; }
@@ -26,6 +38,9 @@
   .form label { color:var(--muted); }
   .row { display:flex; gap:6px; min-width:0; } .row input[type=text] { flex:1; min-width:0; }
   input, select { background:#0003; color:var(--text); border:1px solid #fff2; border-radius:6px; padding:5px 8px; font:inherit; }
+  :root { color-scheme: dark; }  /* native parts (dropdown lists, scrollbars, file dialogs' widgets) in dark too */
+  select option { background:var(--panel); color:var(--text); }
+  select option:checked { background:var(--accent); color:#1a1024; }
   input[type=number] { width:90px; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
   pre.log { background:#0004; border-radius:6px; padding:8px; max-height:260px; overflow:auto; font:12px/1.4 ui-monospace, monospace; white-space:pre-wrap; margin:8px 0 0; }
@@ -35,6 +50,7 @@
 </style>
 </head>
 <body>
+<div class="toplinks"><a href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/README.md" target="_blank" rel="noopener">Help</a><a href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/FAQ.md" target="_blank" rel="noopener">FAQ</a><a href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/TROUBLESHOOTING.md" target="_blank" rel="noopener">Troubleshooting</a></div>
 <h1>Voice Crucible</h1>
 <div class="sub" id="ident">connecting…</div>
 
@@ -48,7 +64,7 @@
 </div>
 
 <div class="panel">
-  <h2>Progress</h2>
+  <h2 class="plain">Progress<a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/INSTALL.md#3-render-one-machine" target="_blank" rel="noopener" title="How far the render is: finished, rendering, waiting and failed lines, time left, runtime and speed of all workers.">?</a></h2>
   <div class="bar"><div id="bar" style="width:0"></div></div>
   <div class="stats" id="stats"></div>
   <div id="leftover" hidden style="margin-top:10px; padding:10px; border:1px solid var(--warn); border-radius:8px">
@@ -61,7 +77,7 @@
 
 
 <div class="panel">
-  <h2>Workers</h2>
+  <h2 class="fold" data-fold="workers" title="Click to fold or unfold">Workers <span class="sum" id="sum-workers"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/WORKERS.md" target="_blank" rel="noopener" title="The computers that render. Pause stops new work, Stop hands back a worker's lines and waits, Shutdown closes the worker program. Update workers asks them to update themselves.">?</a></h2>
   <table><thead><tr><th>Name</th><th>State</th><th>Current batch</th><th>GPU</th><th>VRAM</th><th>Load</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
   <tbody id="workers"></tbody></table>
   <p><button id="pause" onclick="togglePause()">Pause rendering</button> <button onclick="requestUpdate()">Update workers</button>
@@ -72,7 +88,7 @@
 </div>
 
 <div class="panel">
-  <h2>Pairing</h2>
+  <h2 class="fold" data-fold="pairing" title="Click to fold or unfold">Pairing <span class="sum" id="sum-pairing"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/WORKERS.md#pair-a-new-worker-once-per-machine" target="_blank" rel="noopener" title="A new computer joins with a one-time code: run pair.cmd on it and type the code shown here.">?</a></h2>
   <div id="pair"></div>
   <button onclick="newCode()">New pairing code</button>
   <div class="sub">On the worker machine run <code>pair.cmd</code> and type the code. It works once and expires after 10 minutes.</div>
@@ -80,7 +96,7 @@
 </div>
 
 <div class="panel" id="profiles-panel" hidden>
-  <h2>Profiles</h2>
+  <h2 class="fold" data-fold="profiles" title="Click to fold or unfold">Profiles <span class="sum" id="sum-profiles"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/PROFILES.md" target="_blank" rel="noopener" title="A profile holds the characters, their reference voices, the emotion table and how names are pronounced. The bundled one is replaced by updates – make your own copy to change it.">?</a></h2>
   <div class="sub">A profile holds the characters, their reference voices, the emotion table and the pronunciation
     of names. The active profile is used by the buttons above.</div>
   <table><thead><tr><th>Profile</th><th>Version</th><th>Characters</th><th>Voices</th><th></th></tr></thead>
@@ -91,18 +107,33 @@
 </div>
 
 <div class="panel" id="voices-panel" hidden>
-  <h2>Voices</h2>
+  <h2 class="fold" data-fold="voices" title="Click to fold or unfold">Voices <span class="sum" id="sum-voices"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/PROFILES.md#your-own-profile" target="_blank" rel="noopener" title="The reference clip of each character: the voice every line is rendered in. Listen to it or replace it with your own clip (5–30 s of clean speech).">?</a></h2>
   <div class="sub" id="voices-note"></div>
+  <div style="margin:0 0 8px"><label for="voices-engine" class="sub">Show voices for </label>
+    <select id="voices-engine" onchange="try { localStorage.setItem('vc-voices-engine', this.value) } catch (e) {}; refreshControls()"></select></div>
   <table><thead><tr><th>Character</th><th>Pack folder</th><th>Engine</th><th>Reference clip</th><th></th></tr></thead>
   <tbody id="voices"></tbody></table>
 </div>
 
 <div class="panel" id="controls" hidden>
-  <h2>Render</h2>
+  <h2 class="fold" data-fold="render" title="Click to fold or unfold">Render <span class="sum" id="sum-render"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/INSTALL.md#3-render-one-machine" target="_blank" rel="noopener" title="Choose the game's line export (input) and the voice pack folder (output), check with a dry run, then start rendering. Every button runs a crucible.cmd command.">?</a></h2>
   <div class="form">
-    <label for="f-lines">Line export folder</label>
-    <div class="row"><input type="text" id="f-lines" placeholder="&lt;game&gt;\BepInEx\LFTTS-export">
-      <button class="ghost" onclick="pickInto('f-lines','folder','Line export folder (english_lines.jsonl)')">Browse…</button></div>
+    <label for="f-lines">Game lines (read from)</label>
+    <div>
+      <div class="row"><input type="text" id="f-lines" placeholder="&lt;game&gt;\BepInEx\LFTTS-export" onchange="showExportInfo()">
+        <button class="ghost" onclick="pickInto('f-lines','folder','Find the plugin\'s line export (the folder with english_lines.jsonl)')">Browse…</button></div>
+      <div class="sub" style="margin:4px 0 0">The folder where the LethalFantasy TTS plugin exported the game's lines
+        (<code>english_lines.jsonl</code>). Only read, never changed.</div>
+      <div class="sub" id="lines-info" style="margin:4px 0 0"></div>
+    </div>
+    <label for="f-output">Voice pack (written to)</label>
+    <div>
+      <div class="row"><input type="text" id="f-output" readonly placeholder="(default) the output folder in Voice Crucible">
+        <button class="ghost" onclick="chooseOutput()">Change…</button>
+        <button class="ghost" id="f-output-default" onclick="chooseOutput(true)">Default</button></div>
+      <div class="sub" style="margin:4px 0 0">The finished voices go to <code>voices\</code> in this folder. Copy that
+        into the game yourself – Voice Crucible never writes into the game.</div>
+    </div>
     <label for="f-engine">Engine</label>
     <select id="f-engine"></select>
     <label for="f-only">Only keys starting with</label>
@@ -135,17 +166,24 @@
 </div>
 
 <div class="panel">
-  <h2>Output</h2>
+  <h2 class="fold" data-fold="output" title="Click to fold or unfold">Output <span class="sum" id="sum-output"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/INSTALL.md#3-render-one-machine" target="_blank" rel="noopener" title="Where the finished voice pack is and how many files each character has. Copy the voices folder into the game yourself. Diagnose collects facts for a bug report.">?</a></h2>
   <div id="output" class="sub"></div>
   <table><thead><tr><th>Folder</th><th>Files</th><th>Path</th></tr></thead>
   <tbody id="folders"></tbody></table>
+  <div class="actions">
+    <button class="ghost" id="diag-btn" onclick="makeDiagnose()">Diagnose (for a bug report)…</button>
+  </div>
+  <div class="sub" id="diag-note" hidden>Technical facts of this computer (version, OS, GPU, settings, last log lines) –
+    IP addresses, computer and user names and tokens are removed. Please read it before you attach it to a GitHub
+    issue. For a remote worker run <code>crucible.cmd diagnose</code> on that PC.</div>
+  <pre class="log" id="diag-out" hidden></pre>
 </div>
 
 
 
 <div class="panel">
-  <h2>Problems</h2>
-  <table><thead><tr><th>Line</th><th>Character</th><th>State</th><th>Attempts</th><th>Reason</th></tr></thead>
+  <h2 class="fold" data-fold="problems" title="Click to fold or unfold">Problems <span class="sum" id="sum-problems"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/TROUBLESHOOTING.md" target="_blank" rel="noopener" title="Lines that failed a quality check: they are rendered again; after the last attempt the best take is used and listed in report.tsv.">?</a></h2>
+  <table><thead><tr><th>Line</th><th>Character</th><th>State</th><th>Attempts</th><th>Reason</th><th></th></tr></thead>
   <tbody id="problems"></tbody></table>
 </div>
 
@@ -218,10 +256,24 @@ async function refresh() {
     const p = st.pairing_code;
     document.getElementById("pair").innerHTML = p
       ? `<div class="code">${esc(p.code)}</div><div class="sub">valid for ${dur(p.seconds_left)}</div>` : "";
+    const on = st.workers.filter(w => w.online);
+    setSum("workers", `${on.length} online · ${on.filter(w => w.busy_lines).length} rendering` +
+      (st.workers.length > on.length ? ` · ${st.workers.length - on.length} offline` : ""));
+    setSum("pairing", `${(st.paired || []).length} paired` + (p ? ` · code ${p.code}` : ""));
+    setSum("output", (o.folders || []).map(f => `${f.folder} ${f.files}`).join(" · ") || "no files yet");
+    const x0 = st.problems[0];
+    setSum("problems", x0 ? `${x0.key}${x0.variant ? "__" + x0.variant : ""} · ${x0.character} · ` +
+      (x0.status === "failed" ? "failed" : "will retry") : "none");
     document.getElementById("problems").innerHTML = st.problems.map(x =>
-      `<tr><td>${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
+      `<tr><td title="${esc(realNames(x.text))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
       `<td class="${x.status === "failed" ? "bad" : "retry"}">${x.status === "failed" ? "failed" : "will retry"}</td>` +
-      `<td>${x.attempts}</td><td>${esc(x.reason)}</td></tr>`).join("") || `<tr><td colspan="5" class="off">None.</td></tr>`;
+      `<td>${x.attempts}</td><td>${esc(x.reason)}</td>` +
+      `<td style="white-space:nowrap">${x.has_audio ? `<button class="ghost play" data-uid="${x.uid}" title="Play the take that failed" ` +
+      `onclick="playProblem(this)">▶</button> <button class="ghost" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(realNames(x.text))}" ` +
+      `title="The take is fine: use it and mark the line done" onclick="acceptProblem(this)">Accept</button>` : ""}` +
+      ` <button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(realNames(x.text))}" ` +
+      `title="It cannot be spoken well (e.g. a hum): leave this line without a voice" onclick="skipProblem(this)">Skip</button>` +
+      `</td></tr>`).join("") || `<tr><td colspan="6" class="off">None.</td></tr>`;
   } catch (e) {
     document.getElementById("ident").textContent = "Coordinator not reachable – is 'crucible coordinator' running?";
   }
@@ -232,6 +284,45 @@ async function requestUpdate() {
   alert(r.workers.length ? "Update requested: " + r.workers.join(", ")
                          : "No online worker allows update requests (allow_update_requests = true on the worker).");
   refresh();
+}
+let problemAudio = null;
+function playProblem(btn) {  // one shared player: a click plays, a second click on the same line stops
+  const src = `/api/problem-audio?uid=${btn.dataset.uid}`;
+  if (problemAudio && !problemAudio.paused && problemAudio.dataset.uid === btn.dataset.uid) { problemAudio.pause(); return; }
+  if (problemAudio) problemAudio.pause();
+  problemAudio = new Audio(src); problemAudio.dataset.uid = btn.dataset.uid;
+  problemAudio.play().catch(() => alert("No audio for this line yet."));
+}
+let skipSound = "";  // the profile's voices/skip_sound.* (optional), filled by refreshControls
+async function skipProblem(btn) {
+  if (!confirm(`Skip ${btn.dataset.key}?
+
+"${btn.dataset.text}"
+
+` + (skipSound
+      ? `Your skip sound (${skipSound}) plays instead of this line – in the game and in the audiobook. `
+      : `The line stays without a voice: in the game the text shows silently (or the live voice reads it, if ` +
+        `installed); in the audiobook this part is left out. `) + `"Render again" brings it back.`)) return;
+  const resp = await fetch("/api/skip", {method: "POST", headers: H, body: JSON.stringify({uid: Number(btn.dataset.uid)})});
+  const r = await resp.json().catch(() => ({}));
+  if (!resp.ok) alert(r.error || "could not skip this line");
+  refresh();
+}
+async function acceptProblem(btn) {
+  if (!confirm(`Accept ${btn.dataset.key}?
+
+"${btn.dataset.text}"
+
+Its take becomes the line's voice file and the ` +
+               `line is done (it is not rendered again).`)) return;
+  const resp = await fetch("/api/accept", {method: "POST", headers: H, body: JSON.stringify({uid: Number(btn.dataset.uid)})});
+  const r = await resp.json().catch(() => ({}));
+  if (!resp.ok) alert(r.error || "could not accept this line");
+  refresh();
+}
+let nameMap = {};  // respelling -> written name (from the active profile), filled by refreshControls
+function realNames(text) {  // whole words only, so 'Lahna' does not change inside 'Solahna'
+  return String(text ?? "").replace(/[\p{L}\p{N}']+/gu, w => nameMap[w] ?? w);
 }
 let paused = false;
 async function cancelRender() {
@@ -268,13 +359,28 @@ async function unpair(btn) {
 refresh(); setInterval(refresh, 3000);
 
 // ---- controls: render form, local worker, voices (only when the coordinator offers them) ----
+let lastVoicesSig = "";
 let formLoaded = false;
 const $ = id => document.getElementById(id);
 async function refreshControls() {
   let c;
   try { const r = await fetch("/api/control"); if (!r.ok) return; c = await r.json(); } catch (e) { return; }
   $("controls").hidden = false; $("voices-panel").hidden = false; $("profiles-panel").hidden = false;
+  nameMap = c.names || {};
+  skipSound = c.skip_sound || "";
   renderProfiles(c);
+  const missing = c.voices.filter(v => !v.exists).length;
+  $("f-output").value = c.output_dir || "";
+  $("f-output-default").hidden = c.output_dir === c.default_output;
+  const task = c.task, words = (task.title || "").split(" ");
+  const what = words[1] === "render" && words.includes("--dry-run") ? "dry run" : words[1] === "render" &&
+    words.includes("--retry-failed") ? "retry failed" : words[1] === "story" && words.includes("--join") ? "audiobook join"
+    : words[1] === "story" ? "audiobook" : words[1] || "";
+  setSum("render", !task.title ? "nothing started yet" : task.running ? `${what} · running…`
+    : `last: ${what} · ${task.exit_code === 0 ? "finished" : "error"}`);
+  setSum("profiles", `active: ${c.profile}` + (c.bundled ? " (bundled)" : ""));
+  setSum("voices", `${new Set(c.voices.map(v => v.character)).size} characters · ` +
+    (missing ? `${missing} missing` : "all present"));
   $("setup-banner").hidden = !c.setup_needed;
   $("setup-why").textContent = c.setup_needed ? c.setup_needed.charAt(0).toUpperCase() + c.setup_needed.slice(1) + "." : "";
   if (!formLoaded) {
@@ -284,6 +390,7 @@ async function refreshControls() {
       `<option ${e === (f.engine || c.default_engine) ? "selected" : ""}>${esc(e)}</option>`).join("");
     $("f-lines").value = f.lines || ""; $("f-texts").value = f.texts || "";
     $("f-only").value = f.only || ""; $("f-limit").value = f.limit || 0;
+    showExportInfo();
   }
   const t = c.task;
   document.querySelectorAll("#controls .actions button").forEach(b => b.disabled = t.running);
@@ -299,17 +406,27 @@ async function refreshControls() {
   b.hidden = lw.running;
   b.textContent = lw.paired ? "Start worker on this PC" : "Pair and start worker on this PC";
   $("voices-note").innerHTML = `Profile <b>${esc(c.profile)}</b>. ` + (c.bundled
-    ? `This is a bundled profile – program updates replace it, so its clips cannot be changed here. For your own voices make a copy: <code>crucible.cmd profile new mine --from lethalfantasy</code>, set <code>[render] profile = "mine"</code> in voicecrucible.toml and restart the coordinator.`
+    ? `This is a bundled profile – program updates replace it. "Replace…" first makes your own copy of it, switches to it and puts your clip there.`
     : `Use 5–30 s of clean speech of one voice, no music. The old clip is kept as <code>.bak.wav</code>.`)
     + (c.voices_error ? `<div class="err">${esc(c.voices_error)}</div>` : "");
   const playing = [...document.querySelectorAll("#voices audio")].some(a => !a.paused);
   if (playing) return; // do not cut off a clip that is being listened to
-  $("voices").innerHTML = c.voices.map(v => {
-    const q = `character=${encodeURIComponent(v.character)}&engine=${encodeURIComponent(v.engine)}`;
+  const engines = [...new Set(c.voices.map(v => v.engine))].sort(), sel = $("voices-engine");
+  const want = sel.value || (() => { try { return localStorage.getItem("vc-voices-engine") || "all"; } catch (e) { return "all"; } })();
+  sel.innerHTML = ["all", ...engines].map(e => `<option value="${esc(e)}" ${e === want ? "selected" : ""}>${e === "all" ? "all engines" : esc(e)}</option>`).join("");
+  const shown = c.voices.filter(v => sel.value === "all" || v.engine === sel.value);
+  // rebuild only when something changed – a rebuilt <audio> player flickers
+  const sig = JSON.stringify([c.profile, c.bundled, shown]);
+  if (sig === lastVoicesSig) return;
+  lastVoicesSig = sig;
+  $("voices").innerHTML = shown.map(v => {
+    // &t= changes when the clip file changes, so the browser does not play a cached old clip
+    const q = `character=${encodeURIComponent(v.character)}&engine=${encodeURIComponent(v.engine)}&t=${v.mtime || 0}`;
     return `<tr><td>${esc(v.character)}</td><td>${esc(v.folder)}</td><td>${esc(v.engine)}</td>` +
       `<td>${v.exists ? `<audio controls preload="none" src="/api/voice?${q}" style="height:28px;vertical-align:middle"></audio> <span class="sub">${esc(v.seconds ?? "?")} s</span>`
                       : `<span class="bad">missing</span> <span class="sub">${esc(v.file)}</span>`}</td>` +
-      `<td>${c.bundled ? "" : `<button class="ghost" data-c="${esc(v.character)}" data-e="${esc(v.engine)}" onclick="replaceVoice(this)">Replace…</button>`}</td></tr>`;
+      `<td><button class="ghost" data-c="${esc(v.character)}" data-e="${esc(v.engine)}" data-p="${esc(c.profile)}" ` +
+      `data-b="${c.bundled ? 1 : 0}" onclick="replaceVoice(this)">Replace…</button></td></tr>`;
   }).join("") || `<tr><td colspan="5" class="off">No characters in this profile yet – run "Check (dry run)" once.</td></tr>`;
 }
 async function post(url, body) {
@@ -318,9 +435,46 @@ async function post(url, body) {
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
+async function showExportInfo() {
+  const el = $("lines-info"), folder = $("f-lines").value.trim();
+  if (!folder) { el.innerHTML = ""; return; }
+  try {
+    const i = await post("/api/export-info", {lines: folder});
+    const list = o => Object.entries(o).map(([k, n]) => `  ${k}: ${n}`).join("\n");
+    if (!i.has_events) {
+      el.innerHTML = `<span class="on">✓</span> ${i.texts} texts · <span class="bad">no dialogue_events.jsonl – ` +
+        `re-export with plugin 0.5.0+ for speakers and emotions</span>`;
+      return;
+    }
+    const details = `${i.texts} texts in the game (menus included)\n${i.dialogue_lines} dialogue lines\n\n` +
+      `Speakers:\n${list(i.speakers)}\n\nLine types:\n${list(i.types)}\n\n` +
+      `Expressions (emotions):\n${list(i.expressions)}`;
+    el.innerHTML = `<span class="on">✓</span> ${i.dialogue_lines} dialogue lines · ` +
+      `${Object.keys(i.expressions).length} emotions <span title="${esc(details)}" style="cursor:help; ` +
+      `display:inline-flex; width:16px; height:16px; border:1px solid var(--muted); border-radius:50%; ` +
+      `align-items:center; justify-content:center; font-size:10px; font-weight:600">i</span>`;
+  } catch (e) { el.innerHTML = `<span class="bad">${esc(e.message)}</span>`; }
+}
 async function pickInto(id, kind, title) {
-  try { const r = await post("/api/pick", {kind, title, start: $(id).value}); if (r.path) $(id).value = r.path; }
+  try {
+    const r = await post("/api/pick", {kind, title, start: $(id).value});
+    if (r.path) { $(id).value = r.path; if (id === "f-lines") showExportInfo(); }
+  }
   catch (e) { $("task-err").textContent = e.message; }
+}
+async function chooseOutput(useDefault) {
+  $("task-err").textContent = "";
+  try {
+    let folder = "";
+    if (!useDefault) {
+      const r = await post("/api/pick", {kind: "folder", title: "Folder for the voice pack (voices\ goes inside)",
+                                         start: $("f-output").value});
+      if (!r.path) return;
+      folder = r.path;
+    }
+    await post("/api/output-select", {folder});
+  } catch (e) { $("task-err").textContent = e.message; }
+  refreshControls(); refresh();
 }
 async function runTask(action) {
   $("task-err").textContent = "";
@@ -338,9 +492,17 @@ async function startLocalWorker() {
 async function replaceVoice(btn) {
   const character = btn.dataset.c, engine = btn.dataset.e;
   try {
-    const r = await post("/api/pick", {kind: "wav", title: `Reference clip for ${character}`});
+    const r = await post("/api/pick", {kind: "wav", title: `Reference clip for ${character} (5–30 s of clean speech)`});
     if (!r.path) return;
-    if (!confirm(`Use ${r.path} as the ${engine} voice of ${character}?`)) return;
+    if (btn.dataset.b === "1") {  // bundled profile: updates replace it, so the change goes into an own copy
+      const name = prompt(`"${btn.dataset.p}" is a bundled profile – program updates replace it, so your voice would ` +
+        `be lost. Voice Crucible makes your own copy of it (with all its voices and settings), switches to it and ` +
+        `puts your clip there.
+
+Name of your copy (letters, digits, - and _):`, "mine");
+      if (!name) return;
+      await post("/api/profile-new", {name: name.trim(), source: btn.dataset.p});
+    } else if (!confirm(`Use ${r.path} as the ${engine} voice of ${character}? The old clip is kept as .bak.wav.`)) return;
     await post("/api/voice-replace", {character, engine, file: r.path});
   } catch (e) { alert(e.message); }
   refreshControls();
@@ -370,6 +532,17 @@ async function copyProfile(btn) {
   try { await post("/api/profile-new", {name: name.trim(), source: btn.dataset.n}); alert(`Profile "${name.trim()}" created and active.`); }
   catch (e) { alert(e.message); }
   refreshControls(); refresh();
+}
+async function makeDiagnose() {
+  const b = $("diag-btn"); b.disabled = true; b.textContent = "Collecting…";
+  try {
+    const r = await post("/api/diagnose");
+    $("diag-note").hidden = false; $("diag-out").hidden = false; $("diag-out").textContent = r.report;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([r.report], {type: "text/plain"}));
+    a.download = "voicecrucible-diagnose.txt"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { alert(e.message); }
+  b.disabled = false; b.textContent = "Diagnose (for a bug report)…";
 }
 async function runSetup() {
   if (!confirm("Run setup? The coordinator and this computer's worker close, setup opens in its own window. " +
@@ -403,6 +576,21 @@ async function importProfile() {
   } catch (e) { alert(e.message); }
   refreshControls();
 }
+
+// ---- folding panels: click a heading; the folded panels are remembered in this browser ----
+function setSum(key, text) { const el = document.getElementById("sum-" + key); if (el) el.textContent = text; }
+function foldState() { try { return JSON.parse(localStorage.getItem("vc-folded") || "[]"); } catch (e) { return []; } }
+document.querySelectorAll("h2.fold").forEach(h => {
+  const panel = h.closest(".panel"), key = h.dataset.fold;
+  if (foldState().includes(key)) panel.classList.add("collapsed");
+  h.addEventListener("click", e => {
+    if (e.target.closest("button, a, input")) return;
+    panel.classList.toggle("collapsed");
+    const s = new Set(foldState());
+    panel.classList.contains("collapsed") ? s.add(key) : s.delete(key);
+    try { localStorage.setItem("vc-folded", JSON.stringify([...s])); } catch (e) { /* private window */ }
+  });
+});
 refreshControls(); setInterval(refreshControls, 2000);
 </script>
 </body>

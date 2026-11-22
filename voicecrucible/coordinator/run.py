@@ -89,6 +89,8 @@ class RunningCoordinator:
         controls = watcher_server.Controls(cfg, self.api_port, profile_dir(cfg)) if cfg is not None else None
         if controls is not None and controls.profile_folder != controls.default_folder:
             controls.select(controls.profile_folder.name, state)  # the profile last chosen in the watcher
+        if controls is not None:
+            controls.restore_output(state)  # the voice pack folder last chosen in the watcher
         self.watcher = watcher_server.make_server(state, watcher_port, controls)
         self.watcher_port = self.watcher.server_address[1]
         self.discovery = None

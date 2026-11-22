@@ -204,3 +204,13 @@ def test_new_program_version_alone_does_not_ask_for_setup(tmp_path):
     assert setupstate.needed(tmp_path) == ""
     (tmp_path / "uv.lock").write_text(lock.format(v="0.1.0b7").replace('"2.0"', '"2.1"'))  # a package changed
     assert "needs packages" in setupstate.needed(tmp_path)
+
+
+def test_launchers_survive_being_replaced_by_an_update():
+    root = Path(__file__).parents[1]
+    crucible = (root / "crucible.cmd").read_text()
+    assert "voicecrucible.cli %* & exit /b" in crucible  # nothing is read from the file after Python ends
+    worker = (root / "worker.cmd").read_text()
+    assert "copy /y \"%~f0\"" in worker and "if %errorlevel%==75 goto loop" in worker  # loop runs from a copy
+    for f in root.glob("*.cmd"):
+        assert b"\r\n" in f.read_bytes() and b"\n" not in f.read_bytes().replace(b"\r\n", b""), f.name  # CRLF only

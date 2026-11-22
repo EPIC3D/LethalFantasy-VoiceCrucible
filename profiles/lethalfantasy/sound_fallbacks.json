@@ -1,0 +1,10 @@
+{
+  "_comment": "Lines without words (a hum, a laugh, a sigh): if the engine cannot make the sound, the last take says this phrase instead. Rules are tried in order; 'sound' must match every word of the line; 'ends_with' and 'expressions' (the game's facial expression) are optional. The game's subtitle never changes.",
+  "rules": [
+    {"sound": "m+-?h*m+|uh+-?huh+", "say": "Yes."},
+    {"sound": "h+m+", "ends_with": "?", "say": "Yes?"},
+    {"sound": "h+m+", "say": "I wonder..."},
+    {"sound": "(h+[aeiu]+)+h*|(h[aei])+", "say": "That is funny!"},
+    {"sound": "m+|a+h+|m+a+h+|o+h+", "expressions": ["Glowing", "Happy", "Smile", "OpenSmile", "Laugh", "Smug"], "say": "Feels good..."}
+  ]
+}

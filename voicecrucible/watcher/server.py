@@ -84,11 +84,65 @@ def _output(state: CoordinatorState) -> dict:
     if pack.exists():
         for sub in sorted(p for p in pack.iterdir() if p.is_dir()):
             folders.append({"folder": sub.name, "path": str(sub),
-                            "files": sum(1 for f in sub.iterdir() if f.suffix in (".ogg", ".wav") and ".bak." not in f.name)})
+                            "files": sum(1 for f in sub.iterdir() if f.suffix in (".ogg", ".wav") and ".bak." not in f.name
+                                            and ".skipped." not in f.name)})
     value = {"pack": str(pack), "language": state.language, "profile": state.profile, "folders": folders,
              "report": str(state.output_root / "report.tsv"), "logs": str(state.log_dir) if state.log_dir else ""}
     _output_cache.update(at=time.time(), value=value)
     return value
+
+
+def _skip(state: CoordinatorState, uid) -> tuple[int, dict]:
+    """Leave a problem line without a voice; an exported take is renamed to <name>.skipped.<ext> (the plugin does not
+    play it, nothing is deleted)."""
+    if type(uid) is not int:
+        return 400, {"error": "no line"}
+    done = state.queue.skip(uid)
+    if done is None:
+        return 404, {"error": "this line cannot be skipped (it is rendering right now)"}
+    line, output = done
+    if output:
+        path = (state.output_root / output).resolve()
+        if path.is_relative_to(state.output_root.resolve()) and path.is_file():
+            path.replace(path.with_name(f"{path.stem}.skipped{path.suffix}"))
+    sound = skip_sound(getattr(state, "profile", ""))
+    if sound is not None:  # the user's own "nothing here" sound (e.g. crickets) instead of silence
+        from voicecrucible.coordinator import results
+        from voicecrucible.core import audio
+        y, sr = audio.decode(sound.read_bytes())
+        path = results.save(state.output_root, state.language, line, "ogg", audio.encode(y, sr, "ogg"))
+        state.queue.mark_spoken(uid, path.relative_to(state.output_root).as_posix())
+        _log.info("%s skipped in the watcher – %s plays instead", line.file_stem, sound.name)
+        return 200, {"skipped": line.file_stem, "sound": sound.name}
+    _log.info("%s skipped in the watcher – left without a voice", line.file_stem)
+    return 200, {"skipped": line.file_stem}
+
+
+def skip_sound(profile: str) -> Path | None:
+    """The profile's optional voices/skip_sound.* – played for skipped lines instead of silence (off without it)."""
+    from voicecrucible.installer import layout
+    if not profile:
+        return None
+    folder = (Path(profile) if ("/" in profile or "\\" in profile) else layout.ROOT / "profiles" / profile) / "voices"
+    for ext in ("wav", "ogg", "flac", "mp3"):
+        if (folder / f"skip_sound.{ext}").is_file():
+            return folder / f"skip_sound.{ext}"
+    return None
+
+
+def _accept(state: CoordinatorState, uid) -> tuple[int, dict]:
+    """Accept a problem line by hand: its take becomes the line's voice file (exported if it was not yet)."""
+    from voicecrucible.coordinator import app
+    if type(uid) is not int:
+        return 400, {"error": "no line"}
+    output, _take = state.queue.problem_audio(uid)
+    line = state.queue.accept(uid)
+    if line is None:
+        return 404, {"error": "this line cannot be accepted (no take, or it is rendering right now)"}
+    if not output:  # waiting for a retry: its best take so far was not exported yet
+        app._export_best_take(state, line, accepted=True)
+    _log.info("%s accepted by hand in the watcher", line.file_stem)
+    return 200, {"accepted": line.file_stem}
 
 
 def is_local_host(host: str | None, port: int) -> bool:
@@ -110,6 +164,32 @@ class Controls:
         self.default_folder = profile_folder
         chosen = self.memory.load().get("profile")
         self.profile_folder = self._folder(chosen) if chosen and self._folder(chosen).is_dir() else profile_folder
+        self.default_output = cfg.path(cfg.paths.output_dir)
+        self.output_dir = self.default_output
+
+    def restore_output(self, state: CoordinatorState) -> None:
+        """Use the voice pack folder last chosen in the watcher (if it is still allowed)."""
+        from voicecrucible.watcher import tasks
+        saved = self.memory.load().get("output")
+        if saved and Path(saved) != self.default_output:
+            try:
+                self.output_dir = tasks.check_output_folder(self.cfg, saved)
+                state.output_root = self.output_dir
+            except tasks.TaskError as e:
+                _log.warning("the voice pack folder chosen in the watcher is not used: %s", e)
+
+    def select_output(self, folder: str, state: CoordinatorState) -> Path:
+        """Switch the voice pack folder – only while nothing is waiting or rendering."""
+        from voicecrucible.watcher import tasks
+        counts = state.queue.counts()
+        if counts["pending"] + counts["leased"]:
+            raise tasks.TaskError("lines are still waiting or rendering – let the render finish (or cancel it) "
+                                  "before you change the voice pack folder")
+        self.output_dir = tasks.check_output_folder(self.cfg, folder)
+        state.output_root = self.output_dir
+        self.memory.save({"output": str(self.output_dir)})
+        _log.info("voice pack folder set in the watcher: %s", self.output_dir)
+        return self.output_dir
 
     def _folder(self, name: str) -> Path:
         from voicecrucible.installer import profiles
@@ -147,8 +227,21 @@ class Controls:
         return {"task": self.tasks.status(), "local_worker": self.worker.status(), "form": self.memory.load(),
                 "engines": sorted(engines.available()), "default_engine": self.cfg.render.engine,
                 "profile": self.profile_folder.name, "bundled": self.profile_folder.name in tasks.BUNDLED_PROFILES,
-                "default_profile": self.default_folder.name, "profiles": tasks.profiles_overview(self.root),
-                "voices": voices, "voices_error": voices_error, "setup_needed": self._setup_needed()}
+                "default_profile": self.default_folder.name, "output_dir": str(self.output_dir),
+                "default_output": str(self.default_output), "profiles": tasks.profiles_overview(self.root),
+                "voices": voices, "voices_error": voices_error, "setup_needed": self._setup_needed(),
+                "skip_sound": (s.name if (s := skip_sound(str(self.profile_folder))) else ""),
+                "names": self._respellings()}
+
+    def _respellings(self) -> dict[str, str]:
+        """Respelling -> written name of the active profile, so the page shows lines with their real names."""
+        import json
+        try:
+            data = json.loads((self.profile_folder / "pronunciation.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return {s: name for name, spellings in data.items() if not name.startswith("_") and isinstance(spellings, list)
+                for s in spellings if isinstance(s, str)}
 
     def _setup_needed(self) -> str:
         from voicecrucible.installer import setupstate
@@ -161,9 +254,10 @@ class Controls:
         from voicecrucible.watcher import tasks
         if path == "/api/task":
             form = body.get("form") if isinstance(body.get("form"), dict) else {}
-            args = tasks.build_args(form, sorted(engines.available()), self.profile_folder.name)
+            args = tasks.build_args(form, sorted(engines.available()), self.profile_folder.name,
+                                    str(self.output_dir) if self.output_dir != self.default_output else "")
             if form.get("action") in ("render", "dry-run", "story", "story-join"):
-                self.memory.save({k: v for k, v in form.items() if k != "profile"})
+                self.memory.save({k: v for k, v in form.items() if k not in ("profile", "output")})
             self.tasks.start(args)
             return {"started": " ".join(args)}
         if path == "/api/pick":
@@ -203,6 +297,13 @@ class Controls:
                 raise tasks.TaskError(f"profile not installed: {e}") from None
             _log.info("profile '%s' imported in the watcher", meta["name"])
             return {"profile": meta["name"], "backup": str(backup) if backup else ""}
+        if path == "/api/output-select":
+            folder = str(body.get("folder", "")) or str(self.default_output)
+            return {"output": str(self.select_output(folder, state))}
+        if path == "/api/export-info":
+            return tasks.export_info(str(body.get("lines", "")))
+        if path == "/api/diagnose":
+            return {"report": tasks.diagnose_report(self.cfg)}
         if path == "/api/run-setup":
             import threading
             if self.tasks.status()["running"]:
@@ -218,6 +319,8 @@ class Controls:
 
 def make_server(state: CoordinatorState, port: int, controls: Controls | None = None) -> ThreadingHTTPServer:
     """Create the watcher server on 127.0.0.1 (not started)."""
+    # read once: the page always matches the running program, also when an update replaced the file on disk
+    page = _PAGE.read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
         """Serves the page, its status JSON and two actions."""
@@ -236,11 +339,13 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
             if not self._local_host():
                 return
             if self.path in ("/", "/index.html"):
-                self._send(200, _PAGE.read_bytes(), "text/html; charset=utf-8")
+                self._send(200, page, "text/html; charset=utf-8")
             elif self.path == "/api/status":
                 self._json(200, status(state))
             elif self.path == "/api/control" and controls is not None:
                 self._json(200, controls.status())
+            elif self.path.startswith("/api/problem-audio?"):
+                self._problem_audio()
             elif self.path.startswith("/api/voice?") and controls is not None:
                 self._voice()
             else:
@@ -260,6 +365,10 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                 names = state.registry.request_update()
                 _log.info("update requested in the watcher for: %s", ", ".join(names) or "nobody")
                 self._json(200, {"workers": names})
+            elif self.path == "/api/skip":
+                self._json(*_skip(state, self._body().get("uid")))
+            elif self.path == "/api/accept":
+                self._json(*_accept(state, self._body().get("uid")))
             elif self.path == "/api/cancel-render":
                 n = state.queue.cancel()
                 state.leftover = None
@@ -289,7 +398,9 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                 self._json(200 if ok else 404, {"revoked": ok})
             elif controls is not None and self.path in ("/api/task", "/api/pick", "/api/local-worker", "/api/voice-replace",
                                                          "/api/profile-select", "/api/profile-new",
-                                                         "/api/profile-import", "/api/profile-open", "/api/run-setup"):
+                                                         "/api/profile-import", "/api/profile-open", "/api/run-setup",
+                                                         "/api/diagnose", "/api/output-select",
+                                                         "/api/export-info"):
                 from voicecrucible.watcher.tasks import TaskError
                 try:
                     self._json(200, controls.action(self.path, self._body(), state))
@@ -297,6 +408,29 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                     self._json(400, {"error": str(e)})
             else:
                 self._json(404, {"error": "not found"})
+
+        def _problem_audio(self) -> None:
+            """Play the take of a problem line: the exported best take, else the best failed take so far. Only
+            files inside the coordinator's own output / takes folders are served."""
+            from urllib.parse import parse_qs, urlparse
+            try:
+                uid = int(parse_qs(urlparse(self.path).query).get("uid", ["-1"])[0])
+            except ValueError:
+                uid = -1
+            output, take = state.queue.problem_audio(uid)
+            candidates = [(state.output_root / output, state.output_root)] if output else []
+            if take:
+                candidates.append((Path(take), state.takes_dir))
+            for path, root in candidates:
+                try:
+                    path = path.resolve()
+                    if path.is_relative_to(root.resolve()) and path.is_file():
+                        kind = "audio/ogg" if path.suffix == ".ogg" else "audio/wav"
+                        self._send(200, path.read_bytes(), kind)
+                        return
+                except OSError:
+                    pass
+            self._json(404, {"error": "no audio for this line"})
 
         def _voice(self) -> None:
             """Play a reference clip of the active profile (the path comes from the profile, not from the page)."""

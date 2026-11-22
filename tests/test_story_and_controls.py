@@ -237,3 +237,160 @@ def test_unfinished_render_starts_paused(tmp_path):
     q.add("test", [Line(key="K1", character="C", text="t")])
     hold_leftover(state)
     assert state.registry.paused and state.leftover["lines"] == 1 and state.leftover["since"]
+
+
+def test_voice_pack_folder_can_be_changed_in_the_watcher(tmp_path):
+    import shutil
+    from types import SimpleNamespace
+
+    import pytest
+
+    from voicecrucible.core.config import Config
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import Controls
+    from voicecrucible.watcher.tasks import TaskError, build_args
+    shutil.copytree(Path(__file__).parents[1] / "profiles" / "lethalfantasy", tmp_path / "profiles" / "lethalfantasy")
+    cfg = Config(base_dir=tmp_path)
+    q = JobQueue(tmp_path / "q.sqlite")
+    state = SimpleNamespace(queue=q, output_root=cfg.path("output"), profile="lethalfantasy", check_settings={})
+    c = Controls(cfg, 5130, tmp_path / "profiles" / "lethalfantasy", root=tmp_path)
+    target = tmp_path / "packs" / "mine"
+    c.action("/api/output-select", {"folder": str(target)}, state)
+    assert state.output_root == target and target.is_dir() and c.memory.load()["output"] == str(target)
+    with pytest.raises(TaskError, match="BepInEx"):
+        c.action("/api/output-select", {"folder": str(tmp_path / "Game" / "BepInEx" / "plugins")}, state)
+    q.add("test", [Line(key="K", character="C", text="t")])
+    with pytest.raises(TaskError, match="still waiting"):
+        c.action("/api/output-select", {"folder": str(tmp_path / "other")}, state)
+    export = tmp_path / "exp"
+    export.mkdir()
+    (export / "english_lines.jsonl").write_text("")
+    args = build_args({"action": "render", "lines": str(export)}, ["chatterbox"], "lethalfantasy", str(target))
+    assert args[-2:] == ["--output", str(target)] and build_args({"action": "retry-failed"}, [], "", "x") == \
+        ["render", "--retry-failed"]
+
+
+def test_problem_lines_point_to_their_take(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key="K", character="C", text="t")])
+    job = q.claim("w", 1)
+    take = str(tmp_path / "takes" / "1_a1.ogg")
+    q.finish(job.job_id, job.lines[0].uid, False, reason="words differ", take=take, score=3.0)
+    p = q.recent_problems()[0]
+    assert p["has_audio"] and q.problem_audio(p["uid"]) == ("", take)
+    assert q.problem_audio(999) == ("", "")
+
+
+def test_problem_line_can_be_accepted_by_hand(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import _accept
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key="K", character="C", text="t"), Line(key="L", character="C", text="t")])
+    job = q.claim("w", 2)
+    takes = tmp_path / "takes"
+    takes.mkdir()
+    (takes / "1_a1.ogg").write_bytes(b"take")
+    q.finish(job.job_id, job.lines[0].uid, False, reason="other voice", take=str(takes / "1_a1.ogg"), score=3.0)
+    state = SimpleNamespace(queue=q, output_root=tmp_path / "out", language="en", takes_dir=takes)
+    uid = q.recent_problems()[0]["uid"]
+    assert _accept(state, uid)[0] == 200
+    assert q.recent_problems() == [] and q.counts()["done"] == 1
+    assert (tmp_path / "out" / "voices" / "en" / "C" / "K.ogg").read_bytes() == b"take"  # exported
+    assert _accept(state, job.lines[1].uid)[0] == 404  # still rendering, no take: refused
+    assert _accept(state, "1")[0] == 400
+
+
+def test_retry_failed_renders_new_takes_not_the_same_ones(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.engines.base import seed_for
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=2)
+    q.add("test", [Line(key="K", character="C", text="t")])
+    seeds = []
+    for _ in range(2):  # two takes, both fail -> failed for good
+        job = q.claim("w", 1)
+        seeds.append(seed_for(job.lines[0]))
+        q.finish(job.job_id, job.lines[0].uid, False, reason="bad")
+    assert q.counts()["failed"] == 1 and q.retry_failed() == 1
+    job = q.claim("w", 1)
+    assert job.lines[0].attempt == 3 and seed_for(job.lines[0]) not in seeds  # take 3: a new seed, a new take
+
+
+def test_export_summary_counts_lines_speakers_and_emotions(tmp_path):
+    import json
+
+    import pytest
+
+    from voicecrucible.watcher.tasks import TaskError, export_info
+    with pytest.raises(TaskError):
+        export_info(str(tmp_path))
+    (tmp_path / "english_lines.jsonl").write_text('{"key": "A", "text": "a"}\n{"key": "B", "text": "b"}\n')
+    events = [{"key": "A", "character": "Akipo", "type": "Normal", "expression": "Happy"},
+              {"key": "B", "character": "RedTwin", "type": "Followup", "expression": "Angry"},
+              {"key": "B", "character": "RedTwin", "type": "Followup", "expression": "Angry"}]
+    (tmp_path / "dialogue_events.jsonl").write_text("\n".join(json.dumps(e) for e in events) + "\nbroken\n")
+    i = export_info(str(tmp_path))
+    assert i["texts"] == 2 and i["dialogue_lines"] == 2 and i["speakers"] == {"RedTwin": 2, "Akipo": 1}
+    assert i["expressions"] == {"Angry": 2, "Happy": 1} and i["has_events"]
+
+
+def test_render_again_updates_queued_lines_and_short_lines_are_steadier(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.engines.chatterbox import steady_short_line
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("test", [Line(key="K", character="C", text='"Mhm"')])
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, False, reason="gibberish")
+    assert q.add("test", [Line(key="K", character="C", text='"Mm-hmm"')]) == 0  # normal render: skipped
+    assert q.add("test", [Line(key="K", character="C", text='"Mm-hmm"')], again=True) == 1  # render again
+    again = q.claim("w", 1).lines[0]
+    assert again.text == '"Mm-hmm"' and again.attempt == 2  # new text, new take
+    assert steady_short_line('"Definitely"', 0.7, 0.4) == (0.5, 0.5)
+    assert steady_short_line("You know what that means, don't you?", 0.7, 0.4) == (0.7, 0.4)
+
+
+def test_skipped_part_is_left_out_of_the_page(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.coordinator import results
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import _skip
+    parts = [Line(key="PAGE_1__p001", character=story.PARTS_FOLDER, text="a", emotion="Narrator"),
+             Line(key="PAGE_1__p002", character=story.PARTS_FOLDER, text='"Mm-hmm"', emotion="Red")]
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("chatterbox", parts)
+    job = q.claim("w", 2)
+    tone = (0.1 * np.sin(np.arange(24000) / 10)).astype(np.float32)
+    results.save(tmp_path, "en", job.lines[0], "ogg", audio.encode(tone, 24000))
+    q.finish(job.job_id, job.lines[0].uid, True)
+    bad = results.save(tmp_path, "en", job.lines[1], "ogg", b"noise")  # an exported best take
+    q.finish(job.job_id, job.lines[1].uid, False, reason="not human")
+    q.set_output(job.lines[1].uid, bad.relative_to(tmp_path).as_posix())
+    state = SimpleNamespace(queue=q, output_root=tmp_path)
+    assert _skip(state, job.lines[1].uid)[0] == 200
+    assert not bad.exists() and bad.with_name("PAGE_1__p002.skipped.ogg").exists()  # renamed, not deleted
+    assert q.recent_problems() == [] and q.skipped_keys() == {"PAGE_1__p002"}
+    joined, missing = story.join_pages(tmp_path, "en", CFG, parts, skipped=q.skipped_keys())
+    assert joined == ["PAGE_1"] and not missing
+
+
+def test_skip_plays_the_profiles_skip_sound_when_there_is_one(tmp_path):
+    from types import SimpleNamespace
+
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.watcher.server import _skip
+    profile = tmp_path / "myprofile"
+    (profile / "voices").mkdir(parents=True)
+    tone = (0.1 * np.sin(np.arange(8000) / 3)).astype(np.float32)
+    (profile / "voices" / "skip_sound.ogg").write_bytes(audio.encode(tone, 16000))  # e.g. crickets
+    part = Line(key="PAGE_1__p002", character=story.PARTS_FOLDER, text='"Mm-hmm"', emotion="Red")
+    q = JobQueue(tmp_path / "q.sqlite", max_attempts=1)
+    q.add("chatterbox", [part])
+    job = q.claim("w", 1)
+    q.finish(job.job_id, job.lines[0].uid, False, reason="not human")
+    state = SimpleNamespace(queue=q, output_root=tmp_path / "out", language="en", profile=str(profile))
+    assert _skip(state, job.lines[0].uid)[1]["sound"] == "skip_sound.ogg"
+    assert (tmp_path / "out" / "voices" / "en" / story.PARTS_FOLDER / "PAGE_1__p002.ogg").exists()
+    assert q.skipped_keys() == set()  # it has a file now: the audiobook join uses it

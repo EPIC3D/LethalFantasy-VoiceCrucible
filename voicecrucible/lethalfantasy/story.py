@@ -81,7 +81,7 @@ def _chunks(text: str) -> list[str]:
 
 
 def build_lines(pages: dict[str, str], cfg: StoryConfig, lexicon: Lexicon,
-                add_asset: Callable[[Path], str]) -> list[Line]:
+                add_asset: Callable[[Path], str], language: str = "en", sounds=None) -> list[Line]:
     """Queue lines for every part of every page: key '<page>__p001', folder _STORY_PARTS."""
     ids = {spk: add_asset(path) for spk, path in cfg.voices.items() if path.exists()}
     missing = sorted(set(cfg.voices) - set(ids))
@@ -91,13 +91,21 @@ def build_lines(pages: dict[str, str], cfg: StoryConfig, lexicon: Lexicon,
     for page, text in sorted(pages.items(), key=lambda kv: _page_number(kv[0])):
         n = 0
         for speaker, raw in split_page(text, cfg):
-            for chunk in _chunks(prepare(raw, lexicon)):
+            for chunk in _chunks(prepare(raw, lexicon, language=language)):
                 if not has_words(chunk):
                     continue
                 n += 1
+                params = dict(cfg.params.get(speaker, {}))
+                if language == "en" and sounds is not None and (say := sounds.find(chunk)) and not _words(chunk):
+                    params["last_take_text"] = say  # a hum or a laugh: its last take says this
                 lines.append(Line(key=f"{page}__p{n:03d}", character=PARTS_FOLDER, text=chunk, emotion=speaker,
-                                  voice=ids[speaker], params=dict(cfg.params.get(speaker, {}))))
+                                  voice=ids[speaker], params=params))
     return lines
+
+
+def _words(text: str) -> list[str]:
+    from voicecrucible.checks.words import words
+    return words(text)
 
 
 def _page_number(key: str) -> int:
@@ -106,7 +114,7 @@ def _page_number(key: str) -> int:
 
 
 def join_pages(output_root: Path, language: str, cfg: StoryConfig, lines: list[Line],
-               replace: bool = False) -> tuple[list[str], dict]:
+               replace: bool = False, skipped: set[str] | None = None) -> tuple[list[str], dict]:
     """Join the rendered parts of every page into STORY/<page>.ogg; returns (joined pages, {page: missing parts}).
 
     A page file that already exists (perhaps edited by hand) is kept; with `replace` it is replaced and the old one
@@ -115,6 +123,8 @@ def join_pages(output_root: Path, language: str, cfg: StoryConfig, lines: list[L
     parts_dir = output_root / "voices" / language / PARTS_FOLDER
     by_page: dict[str, list[Line]] = {}
     for ln in lines:
+        if ln.key in (skipped or set()):  # left without a voice in the watcher (e.g. a hum the engine cannot do)
+            continue
         by_page.setdefault(ln.key.rsplit("__p", 1)[0], []).append(ln)
     joined, missing = [], {}
     for page, page_lines in by_page.items():

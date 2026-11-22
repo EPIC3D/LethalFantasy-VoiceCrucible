@@ -57,12 +57,34 @@ def _file(value, name: str) -> str | None:
     return str(p.resolve())
 
 
-def build_args(form: dict, engines: list[str], profile: str = "") -> list[str]:
-    """Turn the page's form into crucible arguments (only known fields, each checked); `profile` = active profile."""
+def build_args(form: dict, engines: list[str], profile: str = "", output: str = "") -> list[str]:
+    """Turn the page's form into crucible arguments (only known fields, each checked); `profile` = active profile,
+    `output` = active voice pack folder."""
     args = _build_args(form, engines)
     if profile and args[0] in ("render", "story") and "--retry-failed" not in args:
         args += ["--profile", profile]
+    if output and (args[0] in ("render", "story", "report")) and "--retry-failed" not in args:
+        args += ["--output", output]
     return args
+
+
+def check_output_folder(cfg: config_mod.Config, folder: str) -> Path:
+    """A voice pack folder chosen in the watcher: absolute, creatable, never inside the game's BepInEx folder."""
+    import copy
+    if not folder:
+        raise TaskError("choose a folder for the voice pack")
+    p = Path(folder).resolve()
+    test = copy.deepcopy(cfg)
+    test.paths.output_dir = str(p)
+    try:
+        config_mod.validate(test)
+    except config_mod.ConfigError as e:
+        raise TaskError(str(e)) from None
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise TaskError(f"cannot use this folder: {e}") from None
+    return p
 
 
 def _build_args(form: dict, engines: list[str]) -> list[str]:
@@ -78,8 +100,11 @@ def _build_args(form: dict, engines: list[str]) -> list[str]:
     texts = _file(form.get("texts"), "texts file")
     extra = ["--texts", texts] if texts else []
     if action in ("story", "story-join"):
+        only = str(form.get("only") or "").strip()
+        if not _PREFIX.match(only):
+            raise TaskError("'only keys starting with' may contain letters, digits and _ only")
         return ["story", "--lines", lines, *extra] + (["--join"] if action == "story-join" else []) + \
-            (["--all"] if form.get("all") is True else [])
+            (["--only", only] if only and action == "story" else []) + (["--all"] if form.get("all") is True else [])
     if action not in ("render", "dry-run"):
         raise TaskError(f"unknown action: {action}")
     args = ["render", "--lines", lines, *extra]
@@ -220,7 +245,7 @@ def pick(kind: str, title: str, start: str = "") -> str:
 class FormMemory:
     """Remembers the last form values (export folder, engine, ...) in work/watcher.json."""
 
-    KEYS = ("lines", "texts", "engine", "only", "limit", "profile")
+    KEYS = ("lines", "texts", "engine", "only", "limit", "profile", "output")
 
     def __init__(self, cfg: config_mod.Config):
         self.file = cfg.path(cfg.paths.work_dir) / "watcher.json"
@@ -283,7 +308,7 @@ def voices(profile_folder: Path) -> list[dict]:
     for c in profile_mod.load(profile_folder).characters.values():
         for engine, path in sorted(c.voices.items()):
             row = {"character": c.name, "folder": c.folder, "engine": engine, "file": str(path),
-                   "exists": path.exists(), "seconds": None}
+                   "exists": path.exists(), "seconds": None, "mtime": int(path.stat().st_mtime) if path.exists() else 0}
             if path.exists():
                 try:
                     row["seconds"] = round(sf.info(str(path)).duration, 1)
@@ -364,3 +389,40 @@ def run_setup(cfg: config_mod.Config, registry, worker: LocalWorker, stop_coordi
     subprocess.Popen(f'cmd /c "timeout /t 5 /nobreak >nul & call "{setup}""', cwd=ROOT, env=env,
                      creationflags=_NEW_CONSOLE)
     stop_coordinator()
+
+
+def diagnose_report(cfg: config_mod.Config) -> str:
+    """`crucible diagnose` on this computer (separate process, so the coordinator does not load torch);
+    the report has personal data removed (IPs, computer and user names, tokens)."""
+    r = subprocess.run(_base(cfg) + ["diagnose"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=180, creationflags=_NO_WINDOW)
+    report = cfg.path(cfg.paths.log_dir) / "diagnose.txt"
+    if r.returncode != 0 or not report.exists():
+        raise TaskError("diagnose failed: " + (r.stdout + r.stderr).strip()[-300:])
+    return report.read_text(encoding="utf-8")
+
+
+def export_info(folder: str) -> dict:
+    """What the plugin's line export holds: texts, dialogue lines per speaker and type, the expressions (emotions)."""
+    from collections import Counter
+    p = Path(str(folder))
+    texts_file, events_file = p / "english_lines.jsonl", p / "dialogue_events.jsonl"
+    if not texts_file.is_file():
+        raise TaskError("no english_lines.jsonl in this folder")
+
+    def rows(f: Path) -> list[dict]:
+        out = []
+        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                pass
+        return out
+
+    texts = rows(texts_file)
+    events = rows(events_file) if events_file.is_file() else []
+    expressions = Counter(str(e.get("expression", "")) for e in events if e.get("expression"))
+    return {"texts": len(texts), "dialogue_lines": len({e.get("key") for e in events}),
+            "speakers": dict(Counter(str(e.get("character", "?")) for e in events).most_common()),
+            "types": dict(Counter(str(e.get("type", "?")) for e in events).most_common()),
+            "expressions": dict(expressions.most_common()), "has_events": events_file.is_file()}

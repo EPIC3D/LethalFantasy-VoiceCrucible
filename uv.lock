@@ -2207,7 +2207,7 @@ wheels = [
 
 [[package]]
 name = "voicecrucible"
-version = "0.1.0b7"
+version = "0.1.0b8.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
