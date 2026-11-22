@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.1.0b8 – unreleased
+## 0.1.0b8 – 2026-11-22
+
+Tested on Windows 11 with an NVIDIA RTX 40 series card (coordinator, watcher and worker on one PC), against
+LethalFantasy beta 1.0.3. Updating a remote worker to this version may need one manual start of `worker.cmd`
+(see below).
 
 - **Fix: a worker did not start again after updating itself** (seen 0.1.0b6 → 0.1.0b7): the update replaced
   `worker.cmd` while it was running, and Windows then read the rest of the file from the wrong place. The restart
