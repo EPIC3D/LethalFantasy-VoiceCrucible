@@ -55,6 +55,7 @@ def collect(cfg: Config, log_lines: int = 60) -> str:
     parts.append("GPU:")
     parts += ["  " + n for n in gpucheck.check().notes]
     parts.append(f"Seed-VC installed: {(layout.runtime() / 'components' / 'seed-vc' / '.venv').exists()}")
+    parts.append(f"Breeze installed: {(layout.runtime() / 'components' / 'breeze' / '.venv').exists()}")
     parts.append("Settings:")
     for name, section in asdict(cfg).items():
         if isinstance(section, dict):

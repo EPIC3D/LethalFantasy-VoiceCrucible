@@ -4,7 +4,8 @@
     "folder": "AKIPO",
     "prefix": "AKIPO_DIALOGUE_",
     "voices": {
-      "chatterbox": "voices/chatterbox/Akipo.wav"
+      "chatterbox": "voices/chatterbox/Akipo.wav",
+      "breeze": "voices/reference/Akipo.wav"
     },
     "chatterbox_adjust": [
       0.0,
@@ -15,7 +16,8 @@
     "folder": "RED",
     "prefix": "REDTWIN_DIALOGUE_",
     "voices": {
-      "chatterbox": "voices/chatterbox/RedTwin.wav"
+      "chatterbox": "voices/chatterbox/RedTwin.wav",
+      "breeze": "voices/reference/RedTwin.wav"
     },
     "chatterbox_adjust": [
       0.1,
@@ -26,7 +28,8 @@
     "folder": "BLUE",
     "prefix": "BLUETWIN_DIALOGUE_",
     "voices": {
-      "chatterbox": "voices/chatterbox/BlueTwin.wav"
+      "chatterbox": "voices/chatterbox/BlueTwin.wav",
+      "breeze": "voices/reference/BlueTwin.wav"
     },
     "chatterbox_adjust": [
       -0.08,

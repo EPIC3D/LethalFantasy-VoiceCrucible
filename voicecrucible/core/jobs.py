@@ -25,6 +25,11 @@ class Line:
         """File name without extension, as the plugin looks it up: KEY or KEY__variant."""
         return f"{self.key}__{self.variant}" if self.variant else self.key
 
+    @property
+    def label(self) -> str:
+        """For logs: the line ID the watcher shows and the file name, e.g. "#1234 KEY__they"."""
+        return f"#{self.uid} {self.file_stem}"
+
 
 @dataclass
 class CheckResult:

@@ -102,15 +102,19 @@ class JobQueue:
                 self._new_run_locked()
             return added
 
-    def claim(self, worker: str, max_lines: int) -> Job | None:
-        """Lease up to `max_lines` pending lines of one engine to a worker; None when nothing is pending."""
+    def claim(self, worker: str, max_lines: int, skip_engines: frozenset[str] = frozenset()) -> Job | None:
+        """Lease up to `max_lines` pending lines of one engine to a worker; None when nothing is pending.
+        `skip_engines`: engines this worker cannot run (e.g. too little VRAM) – their lines wait for another worker."""
         with self._lock:
             self._expire_locked()
             # a worker works on one job at a time: anything it still holds is left over from before a restart
             orphans = [r[0] for r in self._db.execute(
                 "SELECT uid FROM lines WHERE worker = ? AND status = 'leased'", (worker,))]
             self._requeue_locked(orphans, "", count_attempt=False)
-            first = self._db.execute("SELECT engine FROM lines WHERE status = 'pending' ORDER BY uid LIMIT 1").fetchone()
+            skip = sorted(skip_engines)
+            not_in = f" AND engine NOT IN ({','.join('?' * len(skip))})" if skip else ""
+            first = self._db.execute(f"SELECT engine FROM lines WHERE status = 'pending'{not_in} ORDER BY uid LIMIT 1",
+                                     skip).fetchone()
             if first is None:
                 return None
             rows = self._db.execute(
@@ -286,7 +290,7 @@ class JobQueue:
         with self._lock:
             reset = dict(self._db.execute("SELECT k, v FROM meta").fetchall()).get("progress_reset", 0)
             found = dict(self._db.execute(
-                "SELECT status, COUNT(*) FROM lines WHERE status IN ('pending', 'leased') OR finished_at >= ?"
+                "SELECT status, COUNT(*) FROM lines WHERE status IN ('pending', 'leased') OR finished_at > ?"
                 " GROUP BY status", (reset,)).fetchall())
         return {s: found.get(s, 0) for s in STATUSES}
 
@@ -295,16 +299,25 @@ class JobQueue:
         with self._lock:
             now = time.time()
             self._set_meta_locked("progress_reset", now)
+            time.sleep(0.002)  # every line finished from now on gets a later time stamp than the reset
             if self._remaining_locked():
                 self._set_meta_locked("run_start", now)
             else:
                 self._db.execute("DELETE FROM meta WHERE k IN ('run_start', 'last_finish')")
 
-    def recent_problems(self, limit: int = 20) -> list[dict[str, str]]:
-        """Lines with a failure reason (failed for good, or waiting for a retry), newest first."""
+    def recent_problems(self, limit: int = 20, query: str = "") -> list[dict[str, str]]:
+        """Lines with a failure reason (failed for good, or waiting for a retry), newest first. `query`: every word
+        must be in the key (with its variant), character, text or reason – searches all problems, not only the newest."""
+        where, args = "reason != ''", []
+        if (uid := _uid_query(query)) is not None:  # "#1234": that line only
+            where, args, query = where + " AND uid = ?", [uid], ""
+        for word in query.lower().split():
+            where += " AND lower(key || '__' || variant || ' ' || character || ' ' || text || ' ' || reason) LIKE ?"
+            args.append(f"%{word}%")
         with self._lock:
             rows = self._db.execute("SELECT key, character, variant, status, attempts, reason, output, uid, best_take,"
-                                    " text FROM lines WHERE reason != '' ORDER BY uid DESC LIMIT ?", (limit,)).fetchall()
+                                    f" text FROM lines WHERE {where} ORDER BY uid DESC LIMIT ?",
+                                    (*args, limit)).fetchall()
             return [{"key": r[0], "character": r[1], "variant": r[2], "status": r[3], "attempts": r[4], "reason": r[5],
                      "best_take_used": bool(r[6]), "uid": r[7], "has_audio": bool(r[6] or r[8]), "text": r[9],
                      "context": self._context_locked(r[7])} for r in rows]
@@ -366,11 +379,13 @@ class JobQueue:
     def finished(self, query: str = "", limit: int = 50) -> list[dict]:
         """Finished lines with a voice file, newest first; `query` filters key or text (case-insensitive)."""
         like = f"%{query.strip()}%"
+        uid = _uid_query(query)  # "#1234": that line only
+        match, args = ("uid = ?", (uid,)) if uid is not None else ("(key LIKE ? OR text LIKE ?)", (like, like))
         with self._lock:
             rows = self._db.execute(
                 "SELECT uid, key, character, variant, text, takes_before + attempts + 1, output, finished_at FROM lines"
-                " WHERE status = 'done' AND output != '' AND (key LIKE ? OR text LIKE ?)"
-                " ORDER BY finished_at DESC, uid DESC LIMIT ?", (like, like, limit)).fetchall()
+                f" WHERE status = 'done' AND output != '' AND {match}"
+                " ORDER BY finished_at DESC, uid DESC LIMIT ?", (*args, limit)).fetchall()
             return [{"uid": r[0], "key": r[1], "character": r[2], "variant": r[3], "text": r[4], "take": r[5],
                      "output": r[6], "finished_at": r[7] or None, "context": self._context_locked(r[0])} for r in rows]
 
@@ -383,8 +398,10 @@ class JobQueue:
             if r is None:
                 return None
             idle = self._remaining_locked() == 0
-            self._db.execute("UPDATE lines SET status = 'pending', takes_before = takes_before + attempts"
-                             " + (CASE WHEN status = 'done' THEN 1 ELSE 0 END), attempts = 0, reason = '',"
+            # the next take must be a new one (its seed comes from the take number): a line that failed a re-check
+            # has attempts = 0 and status 'failed' – counting nothing gave the same take again (heard: same voice)
+            self._db.execute("UPDATE lines SET status = 'pending', takes_before = takes_before + attempts + 1,"
+                             " attempts = 0, reason = '',"
                              " best_take = '', best_score = -1, skipped = 0 WHERE uid = ?", (uid,))
             if once:
                 own = self._db.execute("SELECT params, params_saved FROM lines WHERE uid = ?", (uid,)).fetchone()
@@ -425,3 +442,9 @@ class JobQueue:
             " finished_at = CASE WHEN attempts + ? >= ? THEN ? ELSE finished_at END,"
             " status = CASE WHEN attempts + ? >= ? THEN 'failed' ELSE 'pending' END WHERE uid = ?",
             [(inc, reason, inc, self.max_attempts, time.time(), inc, self.max_attempts, uid) for uid in uids])
+
+
+def _uid_query(query: str) -> int | None:
+    """The line ID of a search like "#1234" (the ID the watcher shows), else None."""
+    q = query.strip()
+    return int(q[1:]) if q.startswith("#") and q[1:].isdigit() else None

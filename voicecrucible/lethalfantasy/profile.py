@@ -33,6 +33,8 @@ class Profile:
     emotions: dict
     lexicon: Lexicon
     sounds: SoundFallbacks = field(default_factory=lambda: SoundFallbacks([]))  # sound_fallbacks.json (optional)
+    reference_text: str = ""  # reference_text.txt: what the "breeze" reference voices say, word for word
+    reference_text_short: str = ""  # reference_text_short.txt: the start of it, said by voices/.../<name>.short.wav
 
     def voice(self, character: str, engine: str) -> Path | None:
         """Reference voice of a character for an engine (the acting reference for qwen_vc), if any."""
@@ -53,7 +55,8 @@ def add_new_characters(folder: Path, names: set[str]) -> list[str]:
     plugin_folders = _json(folders_file) if folders_file.exists() else {}
     for name in added:
         data[name] = {"folder": plugin_folders.get(name, name.upper()), "prefix": f"{name.upper()}_DIALOGUE_",
-                      "voices": {"chatterbox": f"voices/chatterbox/{name}.wav", "qwen_vc": f"voices/acting/{name}.wav"},
+                      "voices": {"chatterbox": f"voices/chatterbox/{name}.wav", "qwen_vc": f"voices/acting/{name}.wav",
+                                 "breeze": f"voices/reference/{name}.wav"},
                       "bible": f"{name}, a character of LethalFantasy.", "persona": f"{name}.",
                       "chatterbox_adjust": [0.0, 0.0], "_added_automatically": "check folder, prefix, voices and bible"}
     if added:
@@ -85,5 +88,8 @@ def load(folder: Path) -> Profile:
                                 bible=c.get("bible", ""), persona=c.get("persona", ""),
                                 chatterbox_adjust=tuple(c.get("chatterbox_adjust", (0.0, 0.0))))
     expressions = {k: v.get("meaning", "") for k, v in _json(folder / "expressions.json").items() if isinstance(v, dict)}
+    ref_text, ref_short = folder / "reference_text.txt", folder / "reference_text_short.txt"
     return Profile(folder, chars, expressions, _json(folder / "emotions.json"),
-                   Lexicon.load(folder / "pronunciation.json"), SoundFallbacks.load(folder / "sound_fallbacks.json"))
+                   Lexicon.load(folder / "pronunciation.json"), SoundFallbacks.load(folder / "sound_fallbacks.json"),
+                   ref_text.read_text(encoding="utf-8").strip() if ref_text.exists() else "",
+                   ref_short.read_text(encoding="utf-8").strip() if ref_short.exists() else "")

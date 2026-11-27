@@ -9,10 +9,10 @@ wrong values are reported with section and name.
 |---|---|
 | `[paths]` | work, output and log folders (relative to the Voice Crucible folder). They may not point into the game's `BepInEx` folder: Voice Crucible never writes into the game, so finished voices there are never overwritten – copy `output\voices` into the game yourself. |
 | `[render]` | `language` (voice pack folder, e.g. `en`, `hu`, `ja`), `engine` (`chatterbox`, `qwen`, `qwen_vc`), `characters` (pack folders to render; empty = all), `profile` (installed profile name or a folder path) |
-| `[checks]` | which quality checks run and their limits (`min_similarity`, `min_mos`, `max_f0`, …), `max_attempts` per line |
+| `[checks]` | which quality checks run and their limits (`min_similarity`, `min_mos`, `max_f0`, …), stricter-or-looser limits for strong emotions (`intense_expressions`, `intense_min_similarity`, `intense_min_mos`, `intense_max_f0`), `max_attempts` per line |
 | `[director]` | acting directions: `mode` = `none` / `file` / `api`; for `api`: `api_base`, `model`, `api_key_env` (the key itself is read from that environment variable – never put keys in the file) |
 | `[coordinator]` | ports (5130 API, 5131 discovery, 5132 watcher), `max_batch` |
-| `[worker]` | `name`, `coordinator` (address if it is not found automatically), `max_batch`, `allow_update_requests`, `seedvc_dir` |
+| `[worker]` | `name`, `coordinator` (address if it is not found automatically), `max_batch`, `allow_update_requests`, `seedvc_dir`, `breeze_dir` |
 
 ## Profiles
 

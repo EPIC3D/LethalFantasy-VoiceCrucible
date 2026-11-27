@@ -13,6 +13,7 @@
 | Chatterbox (Resemble AI) | MIT | MIT (output carries the Perth watermark) |
 | Qwen3-TTS (Alibaba Qwen) | Apache-2.0 | Apache-2.0 |
 | Seed-VC (optional) | GPL-3.0 | GPL-3.0 |
+| Breeze TTS 2 (optional, BreezeBlue) | Apache-2.0 | **BreezeBlue Research and Non-Commercial License** – also covers the audio it generates |
 | Whisper (OpenAI) | MIT | MIT |
 | resemblyzer | Apache-2.0 | Apache-2.0 |
 | UTMOS / SpeechMOS | MIT | MIT (+ Apache-2.0 parts) |
@@ -25,3 +26,7 @@
   are used only to match the game's lines.
 - Rendered voice files are not covered by these licenses; voice packs made from the game's lines have
   their own terms (see the LethalFantasy TTS repository).
+
+**Breeze TTS 2:** its model weights *and the voices it generates* may only be used for personal, research and other
+non-commercial purposes – never sold. Voice packs rendered with Breeze inherit that limit; share them for free only.
+Breeze is an optional component and is downloaded from its own sources only when you choose it in `setup.cmd`.

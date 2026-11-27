@@ -19,6 +19,7 @@ from voicecrucible.engines.base import Audio, Engine, OutOfMemory, seed_for, spo
 SHORT_LINE_WORDS = 2  # lines this short ("Mm-hmm", "Definitely") ...
 SHORT_MAX_EXAGGERATION = 0.5  # ... turn into noise with strong emotion settings (heard with Red's 0.7)
 SHORT_MIN_CFG = 0.5
+SHORT_WORD_LETTERS = 6  # one-word lines up to this length ("Hey!", "Squish!") get stretched retakes
 
 
 def longer_sound(text: str, attempt: int, last_take_text: str = "") -> str:
@@ -27,6 +28,11 @@ def longer_sound(text: str, attempt: int, last_take_text: str = "") -> str:
     profile has one for this sound ("Yes.", "That is funny!"). Lines with words are returned unchanged."""
     from voicecrucible.checks.words import speechless
     extra = (attempt - 1) % 3
+    found = re.findall(r"[\w']+", text)
+    if extra and not speechless(text) and len(found) == 1 and len(found[0]) <= SHORT_WORD_LETTERS:
+        # one-word exclamations ("Hey!", "Stomp!") made Chatterbox invent other words ("Gyo.", "What do you hear?"):
+        # retakes stretch the first vowel ("Heey!", "Heeey!") – the words check merges repeated letters again
+        return re.sub(r"([aeiouAEIOU])", lambda m: m.group(1) * (extra + 1), text, count=1)
     if not extra or not speechless(text):
         return text
     if extra == 2 and last_take_text:

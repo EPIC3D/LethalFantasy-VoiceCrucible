@@ -1,6 +1,6 @@
 [project]
 name = "voicecrucible"
-version = "0.1.0b9"
+version = "0.1.0b10"
 description = "Renders voice packs for the LethalFantasy TTS plugin on your own NVIDIA GPUs."
 readme = "README.md"
 license = "MIT"

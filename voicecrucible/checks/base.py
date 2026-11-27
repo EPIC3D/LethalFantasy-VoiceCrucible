@@ -59,6 +59,22 @@ class Check(ABC):
         """Judge one take."""
 
 
+def limit(settings: dict, line: Line, key: str, default: float) -> float:
+    """A check threshold for this line: the `intense_<key>` value for strong emotions (shouting, strain), else
+    `<key>`. Strong emotions sound far from the calm reference voice without being wrong. A line can carry its own
+    thresholds from its engine (params "check_<key>" / "check_intense_<key>"): Breeze keeps the voice much steadier
+    than Chatterbox, so 0.60 let another speaker's voice through (heard: an Akipo line in Red's voice)."""
+    own = line.params or {}
+    if line.emotion in settings.get("intense_expressions", ()):
+        if f"check_intense_{key}" in own:
+            return float(own[f"check_intense_{key}"])
+        if f"intense_{key}" in settings:
+            return float(settings[f"intense_{key}"])
+    if f"check_{key}" in own:
+        return float(own[f"check_{key}"])
+    return float(settings.get(key, default))
+
+
 def available() -> list[str]:
     """Names of all known checks."""
     return sorted(_MODULES)
@@ -85,6 +101,11 @@ class CheckSet:
             check.load(self.device)
             self._checks.append(check)
         self._key = key
+
+    def word_times(self, samples: np.ndarray, sample_rate: int) -> list[dict] | None:
+        """Whisper word timing of a take (for cutting a primed retake); None when the words check is not loaded."""
+        words = next((c for c in self._checks if c.name == "words"), None)
+        return words.word_times(samples, sample_rate) if words is not None else None
 
     def run(self, take: Candidate) -> list[CheckResult]:
         """Run every check; all are run so the report lists every problem of a take."""

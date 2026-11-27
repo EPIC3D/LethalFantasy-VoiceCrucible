@@ -37,6 +37,7 @@ def folders(root: Path = ROOT) -> dict[str, Path]:
         "Download cache (can be deleted to save space)": rt / "uv-cache",
         "Models (Hugging Face, PyTorch hub, Whisper)": rt / "models",
         "Seed-VC (optional, GPL-3.0)": rt / "components" / "seed-vc",
+        "Breeze TTS 2 (optional, non-commercial model)": rt / "components" / "breeze",
     }
 
 

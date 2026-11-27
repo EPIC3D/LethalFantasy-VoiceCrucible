@@ -11,10 +11,12 @@ import json
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs as _parse_qs, urlsplit as _urlsplit
 
 from voicecrucible import __version__
 from voicecrucible.coordinator.app import CoordinatorState
 from voicecrucible.core import log, protocol
+from voicecrucible.directors import status as director_status
 
 _log = log.get(__name__)
 _PAGE = Path(__file__).with_name("index.html")
@@ -33,8 +35,8 @@ def _compare(version: str) -> str:
     return "same" if theirs == mine else "older" if theirs < mine else "newer"
 
 
-def status(state: CoordinatorState) -> dict:
-    """Everything the watcher page shows, as one JSON object."""
+def status(state: CoordinatorState, problems_query: str = "") -> dict:
+    """Everything the watcher page shows, as one JSON object (`problems_query`: search in the problems)."""
     counts = state.queue.progress_counts()  # since the last Reset in the watcher
     workers = state.registry.snapshot()
     paired = state.pairing.paired()
@@ -43,8 +45,16 @@ def status(state: CoordinatorState) -> dict:
             workers.append({"worker_id": wid, "name": info["name"], "online": False, "gpus": [], "done": 0,
                             "failed": 0, "busy_lines": 0, "lines_per_min": 0, "address": "", "version": "",
                             "accepts_updates": False, "update_status": "", "mode": "run"})
+    director = director_status.read(state.work_dir) if state.work_dir else None
     for w in workers:
         w["version_state"] = _compare(w.get("version", ""))
+        w["directing"] = bool(w.get("online") and state.directing_on(w.get("address", "")))
+    if director:
+        spent = (director.get("finished") or time.time()) - director.get("started", time.time())
+        left = director.get("lines_total", 0) - director.get("lines_done", 0)
+        director["eta_seconds"] = (round(spent / director["lines_done"] * left)
+                                   if director.get("active") and director.get("lines_done") and left > 0 else None)
+        director["elapsed_seconds"] = round(spent)
     speed = sum(w["lines_per_min"] for w in workers if w["online"])
     remaining = counts["pending"] + counts["leased"]
     elapsed = _run_clock(state, remaining)
@@ -62,8 +72,9 @@ def status(state: CoordinatorState) -> dict:
         "takes": state.queue.max_attempts,
         "leftover": state.leftover if state.leftover and remaining else None,
         "workers": workers,
+        "director": director,
         "problems": [{**p, "path": str(f[0]) if (f := _line_files(state, p["uid"])) else ""}
-                     for p in state.queue.recent_problems()],
+                     for p in state.queue.recent_problems(200, problems_query)],
         "pairing_code": None if code is None else {"code": code[0], "seconds_left": round(code[1] - time.time())},
         "output": _output(state),
     }
@@ -134,13 +145,14 @@ def _insert_pause(state: CoordinatorState, uid, ms, length_ms) -> tuple[int, dic
     current.write_bytes(audio.encode(out, sr, current.suffix.lstrip(".")))
     state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
     _log.info("%s: %d ms pause inserted at %d ms in the watcher (the version before is kept as .bak)",
-              current.stem, length_ms, ms)
+              f"#{uid} {current.stem}", length_ms, ms)
     return 200, {"paused": current.stem}
 
 
-def _trim(state: CoordinatorState, uid, ms) -> tuple[int, dict]:
+def _trim(state: CoordinatorState, uid, ms, end: bool = False) -> tuple[int, dict]:
     """Trim view data (ms None: the level of the first 2 s and a suggested cut), or cut the first `ms` of a line's
-    voice file – a bad sound before an otherwise good line. The file before the cut is kept as <name>.bak.<ext>."""
+    voice file – a bad sound before an otherwise good line; `end`: cut everything after `ms` instead (an extra word or
+    noise at the end). The file before the cut is kept as <name>.bak.<ext>."""
     from voicecrucible.core import audio
     files = _line_files(state, uid)
     if files is None or not files[0].is_file():
@@ -152,13 +164,16 @@ def _trim(state: CoordinatorState, uid, ms) -> tuple[int, dict]:
         return 200, {"envelope": audio.envelope(y, sr, seconds=len(y) / sr, step=step / 1000), "step_ms": step,
                      "duration_ms": round(len(y) / sr * 1000),
                      "suggest_ms": round(audio.speech_start(y, sr) * 1000)}
-    if not 0 < ms < len(y) / sr * 1000 - 200:
+    if end and not 200 < ms < len(y) / sr * 1000:
+        return 400, {"error": "cut between 200 ms and the end of the line"}
+    if not end and not 0 < ms < len(y) / sr * 1000 - 200:
         return 400, {"error": "cut between 0 ms and the end of the line"}
-    cut = audio.trim_start(y, sr, ms / 1000)
+    cut = audio.cut_end(y, sr, ms / 1000) if end else audio.trim_start(y, sr, ms / 1000)
     current.replace(old)  # the version before the cut: Restore old brings it back
     current.write_bytes(audio.encode(cut, sr, current.suffix.lstrip(".")))
     state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
-    _log.info("%s: first %d ms cut in the watcher (the version before is kept as .bak)", current.stem, ms)
+    _log.info("%s: %s %d ms cut in the watcher (the version before is kept as .bak)", f"#{uid} {current.stem}",
+              "everything after" if end else "first", ms)
     return 200, {"trimmed": current.stem}
 
 
@@ -175,11 +190,11 @@ def _choose_version(state: CoordinatorState, uid, restore_old: bool) -> tuple[in
         old.replace(current)
         swap.replace(old)
         state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
-        _log.info("%s: the earlier version is back (the newer one is kept as .bak)", current.stem)
+        _log.info("%s: the earlier version is back (the newer one is kept as .bak)", f"#{uid} {current.stem}")
         return 200, {"restored": current.stem}
     old.unlink()
     state.queue.mark_edited(uid)  # made here now: a re-check from a folder keeps it
-    _log.info("%s: new take kept, the earlier version was deleted", current.stem)
+    _log.info("%s: new take kept, the earlier version was deleted", f"#{uid} {current.stem}")
     return 200, {"kept": current.stem}
 
 
@@ -203,9 +218,9 @@ def _skip(state: CoordinatorState, uid) -> tuple[int, dict]:
         y, sr = audio.decode(sound.read_bytes())
         path = results.save(state.output_root, state.language, line, "ogg", audio.encode(y, sr, "ogg"))
         state.queue.mark_spoken(uid, path.relative_to(state.output_root).as_posix())
-        _log.info("%s skipped in the watcher – %s plays instead", line.file_stem, sound.name)
+        _log.info("%s skipped in the watcher – %s plays instead", line.label, sound.name)
         return 200, {"skipped": line.file_stem, "sound": sound.name}
-    _log.info("%s skipped in the watcher – left without a voice", line.file_stem)
+    _log.info("%s skipped in the watcher – left without a voice", line.label)
     return 200, {"skipped": line.file_stem}
 
 
@@ -232,7 +247,7 @@ def _accept(state: CoordinatorState, uid) -> tuple[int, dict]:
         return 404, {"error": "this line cannot be accepted (no take, or it is rendering right now)"}
     if not output:  # waiting for a retry: its best take so far was not exported yet
         app._export_best_take(state, line, accepted=True)
-    _log.info("%s accepted by hand in the watcher", line.file_stem)
+    _log.info("%s accepted by hand in the watcher", line.label)
     return 200, {"accepted": line.file_stem}
 
 
@@ -459,8 +474,9 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                 return
             if self.path in ("/", "/index.html"):
                 self._send(200, page, "text/html; charset=utf-8")
-            elif self.path == "/api/status":
-                self._json(200, status(state))
+            elif self.path == "/api/status" or self.path.startswith("/api/status?"):
+                query = _parse_qs(_urlsplit(self.path).query).get("q", [""])[0][:200]
+                self._json(200, status(state, query))
             elif self.path == "/api/control" and controls is not None:
                 self._json(200, controls.status())
             elif self.path.startswith("/api/old-audio?"):
@@ -523,7 +539,7 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
             elif self.path == "/api/trim":
                 body = self._body()
                 ms = body.get("ms")
-                self._json(*_trim(state, body.get("uid"), ms if type(ms) in (int, float) else -1))
+                self._json(*_trim(state, body.get("uid"), ms if type(ms) in (int, float) else -1, body.get("end") is True))
             elif self.path == "/api/reveal":
                 files = _line_files(state, self._body().get("uid"))
                 if files is None or not files[0].is_file():
@@ -544,7 +560,7 @@ def make_server(state: CoordinatorState, port: int, controls: Controls | None = 
                     once["spoken_text"] = " ".join(text.split())[:500]
                 line = state.queue.redo(uid, once or None) if type(uid) is int else None
                 if line is not None:
-                    _log.info("%s queued again from the watcher (new take%s)", line.file_stem,
+                    _log.info("%s queued again from the watcher (new take%s)", line.label,
                               f", this round with {once}" if once else "")
                 self._json(200 if line else 404, {"queued": line.file_stem} if line else
                            {"error": "this line cannot be rendered again right now (it is waiting or rendering)"})

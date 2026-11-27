@@ -45,6 +45,7 @@ class WorkerConfig:
     max_batch: int = 16
     allow_update_requests: bool = False  # true = the paired coordinator may ask this worker to update itself
     seedvc_dir: str = "runtime/components/seed-vc"  # optional Seed-VC install (GPL-3.0), used by engine "qwen_vc"
+    breeze_dir: str = "runtime/components/breeze"  # optional Breeze TTS 2 install (non-commercial weights)
 
 
 @dataclass
@@ -56,6 +57,7 @@ class DirectorConfig:
     api_base: str = "http://localhost:11434/v1"
     model: str = ""
     api_key_env: str = "VOICECRUCIBLE_API_KEY"
+    context_length: int = 4096  # Ollama only: smaller = less VRAM; 0 = the server's default
 
 
 @dataclass
@@ -79,6 +81,13 @@ class ChecksConfig:
     min_mos: float = 2.0
     max_f0: float = 380.0
     max_attempts: int = 3
+    # Strong emotions (strain while growing, shouting) sound far from the calm reference voice: user-checked good
+    # takes scored similarity 0.63-0.77, MOS 1.7 and 546 Hz (2026-11-25). These lines get the looser limits below.
+    intense_expressions: list[str] = field(default_factory=lambda: [
+        "Hurt", "Angry", "Screaming", "Shocked", "Cry", "EmbarrasedMax"])
+    intense_min_similarity: float = 0.63
+    intense_min_mos: float = 1.5
+    intense_max_f0: float = 600.0
 
 
 @dataclass
@@ -145,7 +154,8 @@ def validate(cfg: Config) -> None:
     k = cfg.checks
     if not 1 <= k.max_attempts <= 10:
         raise ConfigError("[checks] max_attempts must be between 1 and 10")
-    for name, value in (("min_text_match", k.min_text_match), ("min_similarity", k.min_similarity)):
+    for name, value in (("min_text_match", k.min_text_match), ("min_similarity", k.min_similarity),
+                        ("intense_min_similarity", k.intense_min_similarity)):
         if not 0.0 <= value <= 1.0:
             raise ConfigError(f"[checks] {name} must be between 0 and 1")
 

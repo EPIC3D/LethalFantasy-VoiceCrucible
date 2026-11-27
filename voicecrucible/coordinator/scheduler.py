@@ -32,6 +32,7 @@ class WorkerState:
     features: list = field(default_factory=list)  # e.g. ["stop", "shutdown"] – older workers send nothing
     exit_reason: str = ""  # why the worker program ended (sent when it closes); "" while it runs
     exit_at: float = 0.0
+    work_started: float = 0.0  # first job handed out since start / Reset: the speed is measured from here
 
 
 MODES = ("run", "stop", "shutdown")
@@ -92,6 +93,8 @@ class WorkerRegistry:
             if w.version and version and version != w.version:
                 w.update_requested = False  # it came back with a new version: done
             w.name, w.address, w.last_seen, w.gpus, w.busy_lines = name[:64], address, now, gpus[:8], busy_lines
+            if busy_lines and not w.work_started:  # it claimed a job before its first heartbeat reached us
+                w.work_started = now
             w.version, w.accepts_updates, w.update_status = version[:32], accepts_updates, update_status[:200]
             if update_status.startswith("failed"):
                 w.update_requested = False
@@ -121,6 +124,13 @@ class WorkerRegistry:
                     names.append(w.name)
         return names
 
+    def started_job(self, worker_id: str) -> None:
+        """A job was handed out: start the speed clock if it is not running (idle time does not count)."""
+        with self._lock:
+            w = self._workers.get(worker_id)
+            if w is not None and not w.work_started:
+                w.work_started = time.time()
+
     def record(self, worker_id: str, done: int, failed: int) -> None:
         """Count finished lines for the speed estimate."""
         with self._lock:
@@ -143,7 +153,7 @@ class WorkerRegistry:
         now = time.time()
         with self._lock:
             for w in self._workers.values():
-                w.done, w.failed, w.first_seen = 0, 0, now
+                w.done, w.failed, w.first_seen, w.work_started = 0, 0, now, 0.0
 
     def snapshot(self) -> list[dict]:
         """Workers for the watcher, with online flag and lines per minute."""
@@ -152,9 +162,13 @@ class WorkerRegistry:
         with self._lock:
             for w in self._workers.values():
                 d = asdict(w)
-                minutes = max((w.last_seen - w.first_seen) / 60, 1 / 60)
                 d["online"] = now - w.last_seen < OFFLINE_AFTER_SECONDS
                 d["last_contact"] = time.strftime("%H:%M", time.localtime(w.exit_at if w.exit_reason else w.last_seen))
-                d["lines_per_min"] = round((w.done + w.failed) / minutes, 1)
+                # speed since the first job (model loading and idle time before it do not count); lines already
+                # finished inside the running batch count too, so the estimate does not jump batch by batch
+                in_batch = w.progress.get("done", 0) if w.busy_lines else 0
+                finished = w.done + w.failed + in_batch
+                minutes = (w.last_seen - w.work_started) / 60 if w.work_started else 0
+                d["lines_per_min"] = round(finished / minutes, 1) if minutes > 0.5 and finished else 0.0
                 out.append(d)
         return sorted(out, key=lambda d: d["name"])

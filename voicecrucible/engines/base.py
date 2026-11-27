@@ -17,6 +17,7 @@ from voicecrucible.core.jobs import Line
 
 _MODULES = {
     "test": "voicecrucible.engines.tone",
+    "breeze": "voicecrucible.engines.breeze",
     "chatterbox": "voicecrucible.engines.chatterbox",
     "qwen": "voicecrucible.engines.qwen",
     "qwen_vc": "voicecrucible.engines.qwen_vc",

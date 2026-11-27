@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 COPY = ("emotions.json", "expressions.json", "pronunciation.json", "sound_fallbacks.json")
+OPTIONAL = ("reference_text.txt", "reference_text_short.txt")  # what the Breeze reference voices say
 
 
 def export(src: Path, dst: Path) -> None:
@@ -26,6 +27,9 @@ def export(src: Path, dst: Path) -> None:
     (dst / "voices" / "chatterbox").mkdir(parents=True)
     for name in COPY:
         shutil.copyfile(src / name, dst / name)
+    for name in OPTIONAL:
+        if (src / name).exists():
+            shutil.copyfile(src / name, dst / name)
     shutil.copyfile(ROOT / "profiles" / "template" / "director_brief.md", dst / "director_brief.md")
     plugin_folders = src / "plugin_folders.json"
     shutil.copyfile(plugin_folders if plugin_folders.exists() else ROOT / "profiles" / "template" / "plugin_folders.json",
@@ -43,10 +47,18 @@ def export(src: Path, dst: Path) -> None:
     for name, c in chars.items():
         if name.startswith("_"):
             continue
-        voice = c.get("voices", {}).get("chatterbox")
-        if voice:
+        voices = {}
+        for engine in ("chatterbox", "breeze"):  # breeze: the reference reading reference_text (+ its short cut)
+            voice = c.get("voices", {}).get(engine)
+            if not voice or not (src / voice).exists():
+                continue
+            (dst / voice).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src / voice, dst / voice)
-        out[name] = {"folder": c["folder"], "prefix": c["prefix"], "voices": {"chatterbox": voice} if voice else {},
+            short = (src / voice).with_name(Path(voice).stem + ".short" + Path(voice).suffix)
+            if engine == "breeze" and short.exists():
+                shutil.copyfile(short, (dst / voice).with_name(short.name))
+            voices[engine] = voice
+        out[name] = {"folder": c["folder"], "prefix": c["prefix"], "voices": voices,
                      "chatterbox_adjust": c.get("chatterbox_adjust", [0.0, 0.0])}
     (dst / "characters.json").write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     story = src / "story.json"

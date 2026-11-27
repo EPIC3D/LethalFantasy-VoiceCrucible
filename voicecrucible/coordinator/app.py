@@ -22,6 +22,7 @@ from voicecrucible.coordinator.scheduler import WorkerRegistry
 from voicecrucible.coordinator.tls import CoordinatorIdentity
 from voicecrucible.core import log, protocol
 from voicecrucible.core.queue import JobQueue
+from voicecrucible.directors import status as director_status
 
 _log = log.get(__name__)
 MAX_BODY_BYTES = 256 * 1024 * 1024
@@ -44,6 +45,14 @@ class CoordinatorState:
     profile: str = ""  # active profile name, shown in the watcher
     leftover: dict | None = None  # an unfinished render found at start: {"lines", "since"}; rendering starts paused
     stop_event: threading.Event = field(default_factory=threading.Event)  # set to end the coordinator (watcher: run setup)
+    work_dir: Path | None = None  # where `crucible direct` writes its progress (director_status.json)
+
+    def directing_on(self, address: str) -> bool:
+        """True while `crucible direct` runs a language model on this worker's PC: it gets no new work then."""
+        if self.work_dir is None:
+            return False
+        st = director_status.read(self.work_dir)
+        return bool(st and st["active"] and address in st.get("addresses", []))
 
 
 class ApiError(Exception):
@@ -176,13 +185,17 @@ def _heartbeat(state: CoordinatorState, worker: str, body: dict, address: str) -
     return 200, {"ok": True, "update_requested": update_now, "protocol": protocol.PROTOCOL_VERSION, **commands}
 
 
-def _claim(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:
-    """Hand out the next job, or {"job": null} when the queue is empty, rendering is paused or the worker stopped."""
+def _claim(state: CoordinatorState, worker: str, body: dict, address: str) -> tuple[int, dict]:
+    """Hand out the next job, or {"job": null} when the queue is empty, rendering is paused, the worker stopped or
+    its GPU is busy directing."""
     requested = body.get("max_lines") if isinstance(body.get("max_lines"), int) else 1
-    if not state.registry.may_claim(worker):
+    if not state.registry.may_claim(worker) or state.directing_on(address):
         return 200, {"job": None}
-    job = state.queue.claim(worker, state.registry.batch_size(requested))
+    skip = body.get("skip_engines") if isinstance(body.get("skip_engines"), list) else []
+    job = state.queue.claim(worker, state.registry.batch_size(requested),
+                            frozenset(str(e)[:32] for e in skip[:16]))
     if job is not None:
+        state.registry.started_job(worker)
         job.settings = {} if job.engine == "test" else state.check_settings  # beeps would fail every check
     return 200, {"job": None if job is None else job.to_dict()}
 
@@ -244,7 +257,7 @@ def _export_best_take(state: CoordinatorState, line, accepted: bool = False) -> 
     path = results.save(state.output_root, state.language, line, Path(best).suffix.lstrip("."), Path(best).read_bytes())
     state.queue.set_output(line.uid, path.relative_to(state.output_root).as_posix())
     if not accepted:
-        _log.info("%s failed every check – best take exported, listed in the report", line.file_stem)
+        _log.info("%s failed every check – best take exported, listed in the report", line.label)
 
 
 def _release(state: CoordinatorState, worker: str, body: dict, _address: str) -> tuple[int, dict]:

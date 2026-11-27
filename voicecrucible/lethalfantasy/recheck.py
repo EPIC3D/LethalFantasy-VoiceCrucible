@@ -134,7 +134,7 @@ def recheck(cfg: Config, args: argparse.Namespace) -> int:
             if not ok:
                 queue.mark_problem(line.uid, reason)
                 failed += 1
-                _log.info("%s: %s", line.file_stem, reason)
+                _log.info("%s: %s", line.label, reason)
             if i % 10 == 0 or i == len(todo):
                 _log.info("re-check progress: %d / %d checked, %d failed", i, len(todo), failed)
         _log.info("re-check done: %d checked, %d failed – listen to them in the watcher (Problems)", len(todo), failed)

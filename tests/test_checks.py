@@ -147,3 +147,69 @@ def test_drawn_out_words_match_the_word():
     assert compare("Sooo tiny!", "So tiny.", {})["ratio"] == 1.0
     assert compare("That is too good", "That is too good.", {})["ratio"] == 1.0
     assert compare("Get him Lena!", "Kittlin, Lena.", {})["ratio"] < 0.75  # real mistakes still fail
+
+
+def test_primed_retake_is_cut_after_okay():
+    import numpy as np
+
+    from voicecrucible.core.jobs import Line
+    from voicecrucible.worker import primer
+    retake = Line(key="K", character="RED", text="Get him, Lena!", attempt=2)
+    assert not primer.wants_primer(Line(key="K", character="RED", text="Get him, Lena!"))  # first take: plain
+    assert primer.wants_primer(retake) and not primer.wants_primer(Line(key="H", character="RED", text="Mm-hmm", attempt=2))
+    assert primer.primed(retake).params["spoken_text"] == "Okay... Get him, Lena!" and retake.params == {}
+    times = [{"word": " Okay,", "start": 0.1, "end": 0.5}, {"word": " get", "start": 0.9, "end": 1.1}]
+    assert primer.cut_point(np.zeros(48000, np.float32), 24000, times) == int(0.7 * 24000)
+    sr = 24000  # no Whisper timing: the first pause after some sound
+    y = np.concatenate([np.ones(int(0.3 * sr)), np.zeros(int(0.3 * sr)), np.ones(int(0.5 * sr))]).astype(np.float32)
+    assert abs(primer.cut_point(y, sr, None) / sr - 0.45) < 0.02
+
+
+def test_words_quote_marks_are_not_part_of_words():
+    from voicecrucible.checks.words import compare, words
+    assert words("She misspoke, it's 'be bigger'") == ["she", "mispoke", "it's", "be", "biger"]
+    assert compare("She misspoke, it's 'be bigger'", "She misspoke. It's be bigger.", {})["ratio"] == 1.0
+    assert words("'cause I said so") == ["because", "i", "said", "so"]
+
+
+def test_strong_emotions_get_looser_limits():
+    from voicecrucible.checks.base import limit
+    from voicecrucible.core.jobs import Line
+    s = {"min_similarity": 0.8, "intense_min_similarity": 0.62, "intense_expressions": ["Hurt", "Screaming"]}
+    assert limit(s, Line(key="K", character="M", text="x", emotion="Hurt"), "min_similarity", 0.8) == 0.62
+    assert limit(s, Line(key="K", character="M", text="x", emotion="Smile"), "min_similarity", 0.8) == 0.8
+    assert limit({}, Line(key="K", character="M", text="x", emotion="Hurt"), "max_f0", 380.0) == 380.0  # old coordinator
+
+
+def test_left_over_primer_okay_fails_the_first_word():
+    from voicecrucible.checks.words import compare
+    assert not compare("Not again", "Okay, not again", {})["first_ok"]
+    assert compare("Okay, fine", "Okay, fine", {})["first_ok"]
+    assert compare("Definitely", "Ugh, definitely", {})["first_ok"]
+
+
+def test_jeez_and_geez_are_the_same_word():
+    from voicecrucible.checks.words import compare
+    r = compare("Jeez... sucks to be you little thing", "Geez, sucks to be you little thing.", {})
+    assert r["first_ok"] and r["ratio"] == 1.0
+
+
+def test_whisper_hint_only_has_the_names_of_the_line():
+    from voicecrucible.checks.words import line_prompt
+    names = {"solahna": "sol", "seleena": "sel", "lahna": "lan", "akeepo": "aki"}
+    hint = "Akipo, Solana, Lana, Selena."
+    assert line_prompt(hint, "Solahna!", names) == "Solana."
+    assert line_prompt(hint, "Oh come on, Seleena", names) == "Selena."
+    assert line_prompt(hint, "Nothing to see here", names) == ""
+
+
+def test_a_line_can_carry_its_own_thresholds():
+    from voicecrucible.checks.base import limit
+    from voicecrucible.core.jobs import Line
+    settings = {"min_similarity": 0.6, "intense_expressions": ["Hurt"], "intense_min_similarity": 0.63}
+    plain = Line(key="K", character="A", text="x", emotion="Happy")
+    own = Line(key="K", character="A", text="x", emotion="Happy", params={"check_min_similarity": 0.72})
+    hurt = Line(key="K", character="A", text="x", emotion="Hurt", params={"check_intense_min_similarity": 0.65})
+    assert limit(settings, plain, "min_similarity", 0.8) == 0.6
+    assert limit(settings, own, "min_similarity", 0.8) == 0.72
+    assert limit(settings, hurt, "min_similarity", 0.8) == 0.65

@@ -9,7 +9,9 @@ one machine or several on your local network.
 - Speaks every dialogue line of the game in the characters' voices – from **your own game's** line export.
 - Checks every line automatically (all words spoken, start not cut off, same voice, clean audio) and renders
   failed lines again.
-- Default packs with Chatterbox; optional **acting packs** (Qwen3-TTS + Seed-VC) with per-line acting directions.
+- Default packs with Chatterbox; optional **Breeze TTS 2** (best acting, 12 GB+ GPU, non-commercial licence) and
+  Qwen3-TTS + Seed-VC, steered by per-line **acting directions** from a local or cloud AI director
+  ([docs/DIRECTOR.md](docs/DIRECTOR.md)).
 - Several PCs can render together; progress in a small web page (the watcher).
 - Not included (yet): the Memory Orb audiobook (`voices\<language>\STORY\`) – the plugin plays it, but Voice
   Crucible does not render it.
@@ -24,7 +26,7 @@ flowchart TD
     R --> Q[(Job queue)]
     Q <-->|encrypted, paired| W1[Worker PC 1]
     Q <-->|encrypted, paired| W2[Worker PC 2]
-    W1 & W2 --> E[Engine: Chatterbox, or Qwen + Seed-VC]
+    W1 & W2 --> E[Engine: Chatterbox, Breeze TTS 2,<br/>or Qwen + Seed-VC]
     E --> C{Quality checks<br/>words · voice · audio · pitch}
     C -- failed --> Q
     C -- passed --> O[output\voices\&lt;language&gt;\&lt;CHARACTER&gt;\KEY.ogg]
@@ -51,6 +53,8 @@ a wrong name are caught and rendered again.*
 
 Everything also works on the command line: `crucible.cmd render --lines ...` (see docs/INSTALL.md).
 
+**Using the watcher, with the whole workflow as a chart: [docs/WATCHER.md](docs/WATCHER.md)** · AI director: [docs/DIRECTOR.md](docs/DIRECTOR.md)
+
 Step by step: [docs/INSTALL.md](docs/INSTALL.md) · more PCs: [docs/WORKERS.md](docs/WORKERS.md) ·
 settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/PROFILES.md) · problems: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) · **FAQ: [docs/FAQ.md](docs/FAQ.md)**
 
@@ -64,7 +68,8 @@ settings: [docs/CONFIG.md](docs/CONFIG.md) · profiles: [docs/PROFILES.md](docs/
 | RAM | 16 GB | 16 GB or more |
 
 A PC without a supported GPU can still run the coordinator. AMD and Intel GPUs are not supported (yet).
-Details and measured speeds: [docs/GPU.md](docs/GPU.md).
+Details and measured speeds: [docs/GPU.md](docs/GPU.md) – including **how long a whole voice pack takes**
+(directing and rendering per engine, one or two PCs).
 
 **Ad blockers, network filters, firewalls, antivirus:** programs that filter network traffic on your PC (e.g.
 AdGuard, some antivirus "web protection") can cut off connections to the watcher (`http://127.0.0.1:5132`) or

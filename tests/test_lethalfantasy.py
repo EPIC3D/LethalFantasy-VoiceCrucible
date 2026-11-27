@@ -91,7 +91,16 @@ def test_identity_variants():
 def test_directions_file_roundtrip(tmp_path):
     directions.save(tmp_path / "d.json", {"K": {"scene": "s", "delivery": "d", "extra": "dropped"}})
     assert directions.load(tmp_path / "d.json") == {"K": {"scene": "s", "intent": "", "subtext": "",
-                                                          "delivery": "d", "avoid": ""}}
+                                                          "delivery": "d", "avoid": "", "energy": "", "pace": ""}}
+
+
+def test_direction_nudges_chatterbox():
+    base = emotions.chatterbox(PROFILE, "Mira", "Angry")
+    loud = emotions.chatterbox(PROFILE, "Mira", "Angry", {"energy": "5", "pace": "fast"})
+    soft = emotions.chatterbox(PROFILE, "Mira", "Angry", {"energy": 1, "pace": "slow"})
+    assert soft["exaggeration"] < base["exaggeration"] < loud["exaggeration"]
+    assert soft["cfg_weight"] < base["cfg_weight"] < loud["cfg_weight"]
+    assert emotions.chatterbox(PROFILE, "Mira", "Angry", {"energy": "?", "pace": "odd"}) == base  # junk is ignored
 
 
 def test_first_json_object():
@@ -119,11 +128,27 @@ def test_api_director_against_fake_server(monkeypatch):
             pass
 
     server = HTTPServer(("127.0.0.1", 0), Fake)
-    threading.Thread(target=server.handle_request, daemon=True).start()
+    threading.Thread(target=server.serve_forever, daemon=True).start()  # also answers the Ollama probe (GET -> 501)
     monkeypatch.setenv("TEST_KEY", "secret")
     d = ApiDirector(f"http://127.0.0.1:{server.server_address[1]}/v1", "m", "brief", "TEST_KEY")
     out = d.direct("scene", [SceneLine("K1", "Mira", "Hi", "Smile", True), SceneLine("K_Q", "PLAYER", "Yes", "", False)])
+    server.shutdown()
     server.server_close()
     assert list(out) == ["K1"] and out["K1"]["delivery"] == "warm"  # only voiced lines of this scene
     assert seen["auth"] == "Bearer secret" and seen["body"]["messages"][0]["content"] == "brief"
     assert "[not voiced] K_Q" in seen["body"]["messages"][1]["content"]
+
+
+def test_reward_notices_title_words_and_buttons_are_never_voiced():
+    from voicecrucible.lethalfantasy import filters
+    from voicecrucible.lethalfantasy.lines import SourceLine
+    def voiced(key):
+        return filters.is_voiced(SourceLine(key, "Akipo", "Normal", "Neutral", "x"))
+    for key in ("AKIPO_DIALOGUE_EVENT_PET_RESPONSE_REWARD_GOD", "AKIPO_DIALOGUE_TITLE_MAIDEN_C",
+                "AKIPO_DIALOGUE_TITLE_MOTHER_L", "AKIPO_DIALOGUE_EVENT_FMASSAGE_MINIGAME_STEP",
+                "AKIPO_DIALOGUE_EVENT_NIGHTGOWN_CHOICE_2", "AKIPO_DIALOGUE_EVENT_FMASSAGE_MINIGAME_STEP_HARDER_MORE",
+                "AKIPO_DIALOGUE_EVENT_FMASSAGE_MINIGAME_STOP"):
+        assert not voiced(key), key
+    for key in ("AKIPO_DIALOGUE_EVENT_FMASSAGE_MINIGAME_STEP_FIRSTTIME", "AKIPO_DIALOGUE_TITLE_RANDOM_1",
+                "AKIPO_DIALOGUE_IDLE_TITLE_8"):
+        assert voiced(key), key

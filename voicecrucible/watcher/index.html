@@ -69,6 +69,12 @@
   <div class="bar"><div id="bar" style="width:0"></div></div>
   <div class="stats" id="stats"></div>
   <div class="actions" style="margin-top:8px"><button class="ghost" onclick="resetProgress()" title="Count from zero again (finished, failed, runtime, speed). Nothing is deleted.">Reset</button></div>
+  <div id="directing" hidden style="margin-top:10px; padding:10px; border:1px solid var(--line, #444); border-radius:8px">
+    <b>Directing</b> <span id="directing-head"></span>
+    <div class="bar" style="margin:6px 0"><div id="directing-bar" style="width:0"></div></div>
+    <div class="stats" id="directing-stats"></div>
+    <div class="sub" id="directing-note" style="margin-top:4px"></div>
+  </div>
   <div id="leftover" hidden style="margin-top:10px; padding:10px; border:1px solid var(--warn); border-radius:8px">
     <b class="retry">Unfinished render</b> <span id="leftover-text"></span>
     <div class="sub" style="margin:4px 0 8px">Rendering is paused until you decide.</div>
@@ -80,7 +86,7 @@
 
 <div class="panel">
   <h2 class="fold" data-fold="workers" title="Click to fold or unfold">Workers <span class="sum" id="sum-workers"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/WORKERS.md" target="_blank" rel="noopener" title="The computers that render. Pause stops new work, Stop hands back a worker's lines and waits, Shutdown closes the worker program. Update workers asks them to update themselves.">?</a></h2>
-  <table><thead><tr><th>Name</th><th>State</th><th>Current batch</th><th>GPU</th><th>VRAM</th><th>Load</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
+  <table><thead><tr><th>Name</th><th>State</th><th>Current batch</th><th>GPU</th><th>VRAM</th><th>Load · temp</th><th>Done</th><th>Failed</th><th>Lines/min</th><th>Version</th><th></th></tr></thead>
   <tbody id="workers"></tbody></table>
   <p><button id="pause" onclick="togglePause()">Pause rendering</button> <button onclick="requestUpdate()">Update workers</button>
     <button class="ghost" id="local-worker" hidden onclick="startLocalWorker()">Start worker on this PC</button></p>
@@ -210,10 +216,10 @@
 
 <div class="panel">
   <h2 class="fold" data-fold="finished" title="Click to fold or unfold">Finished lines <span class="sum" id="sum-finished"></span><a class="help" href="https://github.com/EPIC3D/LethalFantasy-VoiceCrucible/blob/main/docs/INSTALL.md#3-render-one-machine" target="_blank" rel="noopener" title="Listen to the lines that passed (newest first) and search them by key or text. Redo renders one line again with a new take; the old file is kept as .bak.ogg.">?</a></h2>
-  <div class="row" style="max-width:720px; margin-bottom:8px"><input type="text" id="fin-q" placeholder="search key or text, e.g. STATUE or Lena" oninput="finishedSoon()">
+  <div class="row" style="max-width:720px; margin-bottom:8px"><input type="text" id="fin-q" placeholder="search ID, key or text, e.g. #1234, STATUE or Lena" oninput="finishedSoon()">
     <button class="ghost" onclick="clearView('finished')" title="Hide the lines listed now; new ones still appear. Nothing is deleted.">Clear list</button>
     <button class="ghost" id="fin-all" hidden onclick="showAll('finished')">Show all</button></div>
-  <table><thead><tr><th>Finished</th><th>Line</th><th>Character</th><th>Take</th><th></th></tr></thead>
+  <table><thead><tr><th>ID</th><th>Finished</th><th>Line</th><th>Character</th><th>Take</th><th></th></tr></thead>
   <tbody id="finished"></tbody></table>
 </div>
 
@@ -223,8 +229,9 @@
     <button class="ghost" id="prob-retry" onclick="retryShown()" title="Render the failed lines shown here again (new takes) – not the hidden ones">Retry these</button>
     <button class="ghost" onclick="clearView('problems')" title="Hide the problems listed now; a line that fails again comes back. Nothing is deleted.">Clear list</button>
     <button class="ghost" id="prob-all" hidden onclick="showAll('problems')">Show all</button></div>
-  <table><thead><tr><th>Line</th><th>Character</th><th>State</th><th>Attempts</th><th>Reason</th><th></th></tr></thead>
-  <tbody id="problems"></tbody></table>
+  <div class="row" style="max-width:720px; margin-bottom:8px"><input type="text" id="prob-q" placeholder="search ID, key, text or reason, e.g. #1234, GREETINGS_A_9 or similarity" oninput="refresh()"></div>
+  <div style="max-height:420px; overflow-y:auto"><table><thead><tr><th>ID</th><th>Line</th><th>Character</th><th>State</th><th>Attempts</th><th>Reason</th><th></th></tr></thead>
+  <tbody id="problems"></tbody></table></div>
 </div>
 
 <div id="trim-box" hidden style="position:fixed; inset:0; background:#0009; z-index:10; display:flex; align-items:center; justify-content:center; padding:16px">
@@ -238,6 +245,7 @@
       starts). Listen from the point first. The file before each change is kept as .bak.ogg ("Restore old").</div>
     <div class="actions"><button class="ghost" onclick="playFromCut()">▶ from here</button>
       <button onclick="applyTrim()" title="Remove everything before the point (a bad sound at the start); a short silence and a fade-in are put back">Cut before here</button>
+      <button onclick="applyTrimEnd()" title="Remove everything after the point (an extra word or a noise at the end); a fade-out and a short silence are added">Cut after here</button>
       <button class="ghost" onclick="insertPause()" title="Insert a silence at the point – a dramatic pause between sentences, or a longer start at 0 ms">Insert pause here</button>
       <select id="trim-pause"><option value="250">0.25 s</option><option value="500" selected>0.5 s</option>
         <option value="750">0.75 s</option><option value="1000">1 s</option></select>
@@ -254,11 +262,13 @@
       <label for="redo-say">spoken text</label>
       <div class="row"><textarea id="redo-say" rows="2" style="flex:1; background:#0003; color:var(--text); border:1px solid #fff2; border-radius:6px; padding:5px 8px; font:inherit; resize:vertical"></textarea>
         <button class="ghost" title="Back to the line's original text from the game's export" onclick="$('redo-say').value = redoRaw">↺ original</button></div>
-      <label for="redo-ex">exaggeration</label>
-      <div class="row"><input type="range" id="redo-ex" min="0" max="1" step="0.05" oninput="$('redo-ex-v').textContent = this.value" style="flex:1">
+      <div id="redo-noslider" class="sub" hidden>This line's engine has no sliders (e.g. Breeze: the acting comes from the
+        direction text). Redo renders it again with the same settings; only the spoken text can be changed.</div>
+      <label for="redo-ex" class="cb-only">exaggeration</label>
+      <div class="row cb-only"><input type="range" id="redo-ex" min="0" max="1" step="0.05" oninput="$('redo-ex-v').textContent = this.value" style="flex:1">
         <b id="redo-ex-v" style="width:40px"></b></div>
-      <label for="redo-cfg">cfg_weight</label>
-      <div class="row"><input type="range" id="redo-cfg" min="0" max="1" step="0.05" oninput="$('redo-cfg-v').textContent = this.value" style="flex:1">
+      <label for="redo-cfg" class="cb-only">cfg_weight</label>
+      <div class="row cb-only"><input type="range" id="redo-cfg" min="0" max="1" step="0.05" oninput="$('redo-cfg-v').textContent = this.value" style="flex:1">
         <b id="redo-cfg-v" style="width:40px"></b></div>
     </div>
     <div class="sub" style="margin-top:8px">exaggeration = how strong the emotion is (lower = steadier, fewer garbled
@@ -279,7 +289,7 @@ const dur = s => s == null ? "–" : s < 90 ? s + " s" : s < 5400 ? Math.round(s
 
 async function refresh() {
   try {
-    const st = await (await fetch("/api/status")).json();
+    const st = await (await fetch("/api/status?q=" + encodeURIComponent($("prob-q").value.trim()))).json();
     const c = st.counts, total = c.pending + c.leased + c.done + c.failed;
     document.getElementById("ident").textContent =
       `Coordinator ${st.coordinator_id} · version ${st.version} · certificate ${st.fingerprint}`;
@@ -287,7 +297,7 @@ async function refresh() {
     document.getElementById("stats").innerHTML =
       `<span>Done <b class="on">${c.done}</b></span><span>Rendering <b>${c.leased}</b></span>` +
       `<span>Waiting <b>${c.pending}</b></span><span>Failed <b class="bad">${c.failed}</b></span>` +
-      `<span>Time left <b>${dur(st.eta_seconds)}</b></span>` +
+      `<span>Time left <b>${st.eta_seconds == null && c.leased ? "estimating…" : dur(st.eta_seconds)}</b></span>` +
       `<span>Runtime <b>${dur(st.elapsed_seconds)}</b></span>` +
       `<span><b>${st.lines_per_min ?? 0}</b> lines/min</span>`;
     document.getElementById("workers").innerHTML = st.workers.map(w => {
@@ -295,6 +305,7 @@ async function refresh() {
       const vram = g.memory_total_mb ? `${(g.memory_used_mb/1024).toFixed(1)} / ${(g.memory_total_mb/1024).toFixed(1)} GB` : "–";
       const state = !w.online ? "offline" : w.mode === "shutdown" ? "shutting down" : w.mode === "stop"
         ? (w.busy_lines ? "stopping" : "stopped") : st.paused ? (w.busy_lines ? "pausing" : "paused")
+        : w.directing ? (w.busy_lines ? "finishing – then standby" : "standby – directing on this PC")
         : w.busy_lines ? "rendering" : "idle";
       const ctl = !w.online ? "" : !(w.features || []).includes("stop")
         ? `<span class="sub">Stop / Shutdown need worker 0.1.0b6+ – update it</span>` :
@@ -312,7 +323,10 @@ async function refresh() {
         : "no contact since " + esc(w.last_contact) + " – window closed or network problem"}</span>`;
       return `<tr><td>${esc(w.name)}</td><td class="${w.online && state !== "stopped" ? "on" : "off"}">${state}${why}</td>` +
         `<td>${batch}</td>` +
-        `<td>${esc(g.name || "–")}</td><td>${vram}</td><td>${g.utilization_pct != null ? g.utilization_pct + " %" : "–"}</td>` +
+        `<td>${esc(g.name || "–")}</td><td>${vram}</td><td>${g.utilization_pct != null ? g.utilization_pct + " %" : "–"}` +
+        `${g.temperature_c != null ? ` · <span class="${g.thermal_slowdown ? "bad" : g.headroom_c != null && g.headroom_c < 5 ? "retry" : ""}"` +
+          ` title="GPU temperature${g.headroom_c != null ? ` – ${g.headroom_c} °C left before this card slows down` : ""}">` +
+          `${g.temperature_c} °C${g.thermal_slowdown ? " – slowing down (heat)" : ""}</span>` : ""}</td>` +
         `<td>${w.done}</td><td>${w.failed}</td><td>${w.lines_per_min}</td>` +
         `<td class="${w.version_state === "older" ? "retry" : ""}">${esc(w.version || "–")}` +
         `${w.version_state === "older" ? "<br><span class=\"sub\">older – update this worker</span>" : ""}` +
@@ -328,6 +342,28 @@ async function refresh() {
     document.getElementById("folders").innerHTML = (o.folders || []).map(f =>
       `<tr><td>${esc(f.folder)}</td><td>${f.files}</td><td><code>${esc(f.path)}</code></td></tr>`).join("")
       || `<tr><td colspan="3" class="off">No files yet.</td></tr>`;
+    const d = st.director;
+    document.getElementById("directing").hidden = !d;
+    if (d) {
+      const ago = d.updated ? Math.round(Date.now() / 1000 - d.updated) : 0;
+      const where = `${esc(d.model)} on ${esc(d.host)}`;
+      document.getElementById("directing-head").innerHTML = d.active
+        ? `<span class="on">running</span> · ${where}`
+        : d.running ? `<span class="bad">no progress for ${dur(ago)}</span> · ${where} – is <code>crucible direct</code> still open?`
+        : `<span class="off">done</span> · ${where} · model unloaded`;
+      document.getElementById("directing-bar").style.width = d.lines_total ? (100 * d.lines_done / d.lines_total) + "%" : "0";
+      document.getElementById("directing-stats").innerHTML =
+        `<span>Scenes <b>${d.scenes_done} / ${d.scenes_total}</b></span>` +
+        `<span>Lines <b>${d.lines_done} / ${d.lines_total}</b></span>` +
+        `<span>Failed scenes <b class="${d.failed ? "bad" : ""}">${d.failed}</b></span>` +
+        (d.active ? `<span>Time left <b>${dur(d.eta_seconds)}</b></span>` : "") +
+        `<span>Runtime <b>${dur(d.elapsed_seconds)}</b></span>`;
+      document.getElementById("directing-note").innerHTML = d.active
+        ? (d.current ? `Now: <code>${esc(d.current)}</code>. ` : "") +
+          (d.render ? "Directed scenes go to the render queue right away. " : "") +
+          "The worker on that PC waits until directing is done (its GPU runs the language model)."
+        : "";
+    }
     paused = st.paused;
     const lo = st.leftover, waiting = c.pending + c.leased;
     document.getElementById("leftover").hidden = !lo;
@@ -356,7 +392,7 @@ async function refresh() {
     setSum("problems", x0 ? `${x0.key}${x0.variant ? "__" + x0.variant : ""} · ${x0.character} · ` +
       (x0.status === "failed" ? "failed" : "will retry") : "none");
     document.getElementById("problems").innerHTML = st.problems.map(x =>
-      `<tr><td title="${esc(hoverText(x))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
+      `<tr><td class="sub" style="white-space:nowrap">#${x.uid}</td><td title="${esc(hoverText(x))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td>` +
       `<td class="${x.status === "failed" ? "bad" : "retry"}">${x.status === "failed" ? "failed" : "will retry"}</td>` +
       `<td>${x.attempts}</td><td>${esc(x.reason)}</td>` +
       `<td style="white-space:nowrap">${x.path ? `<button class="ghost" data-uid="${x.uid}" title="${esc(x.path)}
@@ -370,7 +406,7 @@ async function refresh() {
       (x.status === "failed" ? ` <button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(hoverText(x))}" data-raw="${esc(x.text)}" ` +
         `data-ex="${(x.context?.params || {}).exaggeration ?? ""}" data-cfg="${(x.context?.params || {}).cfg_weight ?? ""}" ` +
         `title="Render again – optionally with other settings for this one round" onclick="redoLine(this)">Redo…</button>` : "") +
-      `</td></tr>`).join("") || `<tr><td colspan="6" class="off">None.</td></tr>`;
+      `</td></tr>`).join("") || `<tr><td colspan="7" class="off">None.</td></tr>`;
   } catch (e) {
     document.getElementById("ident").textContent = "Coordinator not reachable – is 'crucible coordinator' running?";
   }
@@ -432,8 +468,9 @@ Last take says: "${p.last_take_text}"` : "") +
 This round spoken as: "${realNames(p.spoken_text)}"` : "") +
     (c.prev ? `
 
-Before: "${realNames(c.prev)}"` : "") + (c.next ? `
-After: "${realNames(c.next)}"` : "");
+Previous key: "${realNames(c.prev)}"` : "") + (c.next ? `
+Next key: "${realNames(c.next)}"` : "") + (c.prev || c.next ? `
+(neighbouring keys – often other random variants, not what is said before or after)` : "");
 }
 let nameMap = {};  // respelling -> written name (from the active profile), filled by refreshControls
 function realNames(text) {  // whole words only, so 'Lahna' does not change inside 'Solahna'
@@ -475,7 +512,7 @@ async function loadFinished() {
     return today ? d.toLocaleTimeString() : d.toLocaleDateString() + " " + d.toLocaleTimeString();
   };
   $("finished").innerHTML = r.lines.map(x =>
-    `<tr><td style="white-space:nowrap" class="sub">${when(x.finished_at)}</td><td title="${esc(hoverText(x))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}` +
+    `<tr><td class="sub" style="white-space:nowrap">#${x.uid}</td><td style="white-space:nowrap" class="sub">${when(x.finished_at)}</td><td title="${esc(hoverText(x))}" style="cursor:help; text-decoration:underline dotted">${esc(x.key)}` +
     `${x.variant ? "__" + esc(x.variant) : ""}</td><td>${esc(x.character)}</td><td>${x.take}</td>` +
     `<td style="white-space:nowrap">${x.path ? `<button class="ghost" data-uid="${x.uid}" title="${esc(x.path)}
 (click: show in Explorer)" onclick="reveal(this)">📁</button> ` : ""}` +
@@ -492,7 +529,7 @@ async function loadFinished() {
     `<button class="small" data-uid="${x.uid}" data-key="${esc(x.key)}" data-text="${esc(realNames(x.text))}" ` +
     `title="It passed the checks but sounds wrong and cannot be spoken well: leave it without a voice" ` +
     `onclick="skipProblem(this).then(() => { lastFinishedSig = ''; loadFinished(); })">Skip</button></td></tr>`
-  ).join("") || `<tr><td colspan="5" class="off">No finished lines${$("fin-q").value ? " match" : " yet"}.</td></tr>`;
+  ).join("") || `<tr><td colspan="6" class="off">No finished lines${$("fin-q").value ? " match" : " yet"}.</td></tr>`;
 }
 async function chooseVersion(btn, restoreOld) {
   const key = btn.dataset.key;
@@ -556,6 +593,13 @@ async function applyTrim() {
   try { await post("/api/trim", {uid: trimUid, ms}); } catch (e) { alert(e.message); return; }
   await reopenTrim();
 }
+async function applyTrimEnd() {
+  const ms = Number($("trim-ms").value);
+  if (!ms) { alert("Move the point first."); return; }
+  if (!confirm(`Cut everything after ${ms} ms?`)) return;
+  try { await post("/api/trim", {uid: trimUid, ms, end: true}); } catch (e) { alert(e.message); return; }
+  await reopenTrim();
+}
 async function insertPause() {
   const ms = Number($("trim-ms").value), length_ms = Number($("trim-pause").value);
   try { await post("/api/insert-pause", {uid: trimUid, ms, length_ms}); } catch (e) { alert(e.message); return; }
@@ -572,14 +616,19 @@ function redoLine(btn) {  // opens the Redo window; the settings there are for t
   redoUid = Number(btn.dataset.uid);
   $("redo-key").textContent = btn.dataset.key;
   $("redo-text").textContent = btn.dataset.text;
-  const ex = btn.dataset.ex === "" ? 0.5 : Number(btn.dataset.ex), cfg = btn.dataset.cfg === "" ? 0.5 : Number(btn.dataset.cfg);
+  // only Chatterbox lines have these sliders; others (Breeze) would show a made-up 0.5
+  const sliders = btn.dataset.ex !== "";
+  document.querySelectorAll("#redo-box .cb-only").forEach(e => e.hidden = !sliders);
+  $("redo-noslider").hidden = sliders;
+  const ex = sliders ? Number(btn.dataset.ex) : 0.5, cfg = btn.dataset.cfg === "" ? 0.5 : Number(btn.dataset.cfg);
   $("redo-ex").value = ex; $("redo-ex-v").textContent = ex;
   $("redo-cfg").value = cfg; $("redo-cfg-v").textContent = cfg;
   $("redo-say").value = redoRaw = btn.dataset.raw || "";
   $("redo-box").hidden = false;
 }
 async function sendRedo(withSettings) {
-  const once = withSettings ? {exaggeration: Number($("redo-ex").value), cfg_weight: Number($("redo-cfg").value)} : {};
+  const once = withSettings && $("redo-noslider").hidden
+    ? {exaggeration: Number($("redo-ex").value), cfg_weight: Number($("redo-cfg").value)} : {};
   const say = $("redo-say").value.trim();
   if (withSettings && say && say !== redoRaw) once.spoken_text = say;  // only a changed text is sent
   $("redo-box").hidden = true;
@@ -658,7 +707,8 @@ async function refreshControls() {
     $("task-ctl").hidden = !c.task.running;
     const g = (c.local_gpu || [])[0];
     $("task-gpu").textContent = g ? `This PC: ${g.name} · VRAM ${(g.memory_used_mb / 1024).toFixed(1)} / ` +
-      `${(g.memory_total_mb / 1024).toFixed(1)} GB · load ${g.utilization_pct ?? "–"} %` : "";
+      `${(g.memory_total_mb / 1024).toFixed(1)} GB · load ${g.utilization_pct ?? "–"} %` +
+      (g.temperature_c != null ? ` · ${g.temperature_c} °C` : "") : "";
     $("task-progress-text").innerHTML = (c.task.paused ? `<span class="retry"><b>paused</b></span>` : "") +
       (c.task.stopping ? `<span class="retry"><b>stopping…</b></span>` : "") +
       `<span>Re-check: <b>${i} / ${n}</b> checked</span>` +

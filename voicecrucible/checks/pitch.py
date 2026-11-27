@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from voicecrucible.checks.base import CHECK_RATE, Candidate, Check
+from voicecrucible.checks.base import CHECK_RATE, Candidate, Check, limit as limit_for
 from voicecrucible.core.jobs import CheckResult
 
 
@@ -21,7 +21,7 @@ class PitchCheck(Check):
         f0, voiced, _ = librosa.pyin(take.audio16k, fmin=80, fmax=600, sr=CHECK_RATE)
         f0 = f0[voiced & ~np.isnan(f0)]
         median = float(np.median(f0)) if len(f0) else 0.0
-        limit = self.settings.get("max_f0", 380.0)
+        limit = limit_for(self.settings, take.line, "max_f0", 380.0)
         if median <= 0:
             return CheckResult(self.name, False, "no voiced speech found", 0.0)
         ok = median <= limit

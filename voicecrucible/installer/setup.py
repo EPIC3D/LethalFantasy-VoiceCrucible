@@ -20,7 +20,7 @@ from voicecrucible.core.config import Config
 from voicecrucible.installer import disk, gpucheck, inventory, layout, manifest
 
 _log = log.get("setup")
-OPTIONAL = ("qwen", "seedvc")
+OPTIONAL = ("qwen", "seedvc", "breeze")
 CU128_INDEX = "https://download.pytorch.org/whl/cu128"
 
 
@@ -44,6 +44,9 @@ def choose(args: argparse.Namespace, gpu_ok: bool) -> set[str]:
         wanted.add("qwen")
         if _ask("Also install Seed-VC voice conversion (GPL-3.0, ~6 GB) – needed for acting packs?", False, args.yes):
             wanted.add("seedvc")
+    if _ask("Also install Breeze TTS 2 (needs a 12 GB+ GPU, ~13 GB; model and audio for NON-COMMERCIAL use only)?",
+            False, args.yes):
+        wanted.add("breeze")
     return wanted
 
 
@@ -69,19 +72,21 @@ def _download(url: str, target: Path) -> None:
     print()
 
 
-def _install_seedvc(comp: manifest.Component, uv: str, env: dict[str, str], root: Path) -> None:
-    """Download Seed-VC at the pinned commit, verify the checksum, unpack, create its own environment."""
-    target = layout.runtime(root) / "components" / "seed-vc"
+def _install_component(comp: manifest.Component, uv: str, env: dict[str, str], root: Path) -> None:
+    """Download a separate component (Seed-VC, Breeze) at its pinned commit, verify the checksum, unpack, and create
+    its own environment in runtime/components/<folder>."""
+    name = comp.extra["folder"]
+    target = layout.runtime(root) / "components" / name
     downloads = layout.runtime(root) / "downloads"
     downloads.mkdir(parents=True, exist_ok=True)
-    archive = downloads / f"seed-vc-{comp.extra['commit'][:12]}.zip"
+    archive = downloads / f"{name}-{comp.extra['commit'][:12]}.zip"
     if not archive.exists():
-        _log.info("downloading Seed-VC from %s", comp.extra["zip_url"])
+        _log.info("downloading %s from %s", name, comp.extra["zip_url"])
         _download(comp.extra["zip_url"], archive)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     if digest != comp.extra["zip_sha256"]:
         archive.unlink()
-        raise RuntimeError("Seed-VC download does not match the expected checksum – not installed")
+        raise RuntimeError(f"{name} download does not match the expected checksum – not installed")
     if target.exists():
         shutil.rmtree(target)
     with zipfile.ZipFile(archive) as z:
@@ -96,12 +101,12 @@ def _install_seedvc(comp: manifest.Component, uv: str, env: dict[str, str], root
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_bytes(z.read(member))
     venv = target / ".venv"
-    # --no-config: Seed-VC has its own pinned versions; Voice Crucible's pyproject overrides must not apply
+    # --no-config: the component has its own pinned versions; Voice Crucible's pyproject overrides must not apply
     _run([uv, "venv", "--no-config", str(venv), "--python", comp.extra.get("python", "3.12")], env)
     py = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    overrides = ["--overrides", str(root / comp.extra["overrides"])] if comp.extra.get("overrides") else []
     _run([uv, "pip", "install", "--no-config", "--python", str(py), "-r", str(root / comp.extra["requirements"]),
-          "--overrides", str(root / comp.extra["overrides"]),
-          "--extra-index-url", CU128_INDEX, "--index-strategy", "unsafe-best-match"], env)
+          *overrides, "--extra-index-url", CU128_INDEX, "--index-strategy", "unsafe-best-match"], env)
 
 
 def run(cfg: Config, args: argparse.Namespace) -> int:
@@ -139,8 +144,9 @@ def run(cfg: Config, args: argparse.Namespace) -> int:
     try:
         extras = [x for c in selected for x in c.extras]
         _run([uv, "sync", "--frozen", "--project", str(root)] + [a for x in extras for a in ("--extra", x)], env)
-        if "seedvc" in keys:
-            _install_seedvc(components["seedvc"], uv, env, root)
+        for key in ("seedvc", "breeze"):
+            if key in keys:
+                _install_component(components[key], uv, env, root)
     except (RuntimeError, OSError) as e:
         _log.error("installation stopped: %s – details in the install log (logs\\setup_*.log)", e)
         return 1

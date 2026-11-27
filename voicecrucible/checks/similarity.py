@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from voicecrucible.checks.base import Candidate, Check
+from voicecrucible.checks.base import Candidate, Check, limit as limit_for
 from voicecrucible.core.jobs import CheckResult
 
 
@@ -39,7 +39,7 @@ class SimilarityCheck(Check):
             from resemblyzer import preprocess_wav
             self._refs[take.reference] = self._encoder.embed_utterance(preprocess_wav(take.reference))
         sim = float(np.dot(self._refs[take.reference], self._embed(take.audio16k)))
-        limit = self.settings.get("min_similarity", 0.80)
+        limit = limit_for(self.settings, take.line, "min_similarity", 0.80)
         from voicecrucible.checks.words import speechless
         if speechless(take.line.text):  # a hum is far from the speaking voice: good hums 0.52-0.62, noise 0.43
             limit = min(limit, SPEECHLESS_LIMIT)

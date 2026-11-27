@@ -22,3 +22,4 @@ profiles/*
 !profiles/lethalfantasy/
 !profiles/lethalfantasy/voices/**/*.wav
 !tests/data/profile/voices/**/*.wav
+voicecrucible.toml.*

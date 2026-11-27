@@ -60,6 +60,7 @@ def build_state(cfg: Config) -> app.CoordinatorState:
         takes_dir=folder / "takes",
         log_dir=cfg.path(cfg.paths.log_dir),
         profile=cfg.render.profile,
+        work_dir=cfg.path(cfg.paths.work_dir),
     )
 
 

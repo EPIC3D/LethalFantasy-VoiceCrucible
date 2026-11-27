@@ -15,7 +15,7 @@ from voicecrucible import __version__
 from voicecrucible.core import log, protocol
 from voicecrucible.core.config import Config
 from voicecrucible.core.jobs import Job
-from voicecrucible.engines import seedvc
+from voicecrucible.engines import breeze, seedvc
 from voicecrucible.worker import discovery, gpu, identity
 from voicecrucible.worker.assets import AssetCache
 from voicecrucible.worker.runner import Runner
@@ -101,6 +101,7 @@ class WorkerClient:
         self.shutdown_requested = False
         self._update_status = ""
         self.exit_code = 0
+        self.skip_engines = _engines_this_machine_cannot_run()
         if runner.voice_path is None:
             cache = AssetCache(cfg.path(cfg.paths.work_dir) / "worker" / "assets", self._fetch_asset)
             runner.voice_path = cache.get
@@ -123,7 +124,8 @@ class WorkerClient:
                         self._upload(self._unsent)
                     if self._update_wanted.is_set() and self._self_update():
                         break  # between jobs: nothing is held; worker.cmd restarts the new version
-                    status, answer = self._post("/api/claim", {"max_lines": self.runner.batch_size})
+                    status, answer = self._post("/api/claim", {"max_lines": self.runner.batch_size,
+                                                               "skip_engines": self.skip_engines})
                     self._check(status, answer)
                     backoff = IDLE_POLL_SECONDS
                     if answer.get("job") is None:
@@ -197,7 +199,7 @@ class WorkerClient:
         self._cancel.clear()  # a cancel meant the previous job; a stopped worker gets no new job at all
         try:
             takes = self.runner.render(job, cancel=self._cancel.is_set)
-        except (ImportError, seedvc.SeedVCNotInstalled) as e:  # this machine lacks a component: not the lines' fault
+        except (ImportError, seedvc.SeedVCNotInstalled, breeze.BreezeNotInstalled) as e:  # a component is missing here
             self._release(job, "", failed=False)
             self.stop.set()
             raise MissingComponent(f"{e} – a component for engine '{job.engine}' is missing on this worker. "
@@ -302,9 +304,19 @@ class WorkerClient:
         return self._conn
 
 
+def _engines_this_machine_cannot_run() -> list[str]:
+    """Engines this worker never asks for (their lines go to other workers), with the reason in the log."""
+    skip = []
+    if reason := breeze.cannot_run():
+        _log.info("engine 'breeze' is not used on this worker: %s", reason)
+        skip.append("breeze")
+    return skip
+
+
 def run(cfg: Config) -> int:
     """`crucible worker`: work until Ctrl+C."""
     os.environ.setdefault(seedvc.ENV_DIR, str(cfg.path(cfg.worker.seedvc_dir)))
+    os.environ.setdefault(breeze.ENV_DIR, str(cfg.path(cfg.worker.breeze_dir)))
     try:
         client = WorkerClient(cfg, Runner(gpu.default_device(), cfg.worker.max_batch))
     except NotPaired as e:

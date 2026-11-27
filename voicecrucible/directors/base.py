@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
-FIELDS = ("scene", "intent", "subtext", "delivery", "avoid")
+FIELDS = ("scene", "intent", "subtext", "delivery", "avoid", "energy", "pace")  # energy 1-5, pace slow|normal|fast
 
 
 @dataclass
@@ -19,6 +19,7 @@ class SceneLine:
     text: str
     expression: str
     voiced: bool
+    alt: int = -1  # which random alternative of the scene it belongs to (-1 = unknown); alternatives are not one talk
 
 
 class Director(ABC):

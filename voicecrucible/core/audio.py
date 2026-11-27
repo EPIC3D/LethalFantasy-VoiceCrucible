@@ -98,6 +98,15 @@ def trim_start(y: np.ndarray, sr: int, seconds: float) -> np.ndarray:
     return pad_lead_in(out, sr)
 
 
+def cut_end(y: np.ndarray, sr: int, seconds: float) -> np.ndarray:
+    """Keep only the first `seconds` (an extra word or a noise after a good line), fade out over 30 ms, end with
+    a short silence."""
+    out = y[:int(max(0.0, seconds) * sr)].astype(np.float32).copy()
+    fade = min(int(0.03 * sr), len(out))
+    out[len(out) - fade:] *= np.linspace(1, 0, fade, dtype=np.float32)
+    return np.concatenate([out, np.zeros(int(0.1 * sr), dtype=np.float32)])
+
+
 def trim_tail(y: np.ndarray, sr: int, threshold_db: float = -40.0, keep: float = 0.12) -> np.ndarray:
     """Cut a trailing breath/whisper decay: end shortly after the level was last within `threshold_db` of the peak."""
     hop, frame = 256, 1024

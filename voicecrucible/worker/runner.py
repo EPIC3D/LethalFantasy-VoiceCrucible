@@ -90,8 +90,14 @@ class Runner:
                 break
             size = min(self.batch_size, engine.batch_lines or self.batch_size)
             chunk = job.lines[i:i + size]
+            from voicecrucible.worker import primer
+            # Chatterbox retakes: "Okay... <line>" or "Hey! Hey!" – other engines act from the first word (heard with
+            # Breeze: a primed retake started calm and lost its acting)
+            tricks = engine.name == "chatterbox"
+            spoken = [primer.primed(ln) if tricks and primer.wants_primer(ln)
+                      else primer.doubled(ln) if tricks and primer.wants_double(ln) else ln for ln in chunk]
             try:
-                audios = engine.render(chunk, voices)
+                audios = engine.render(spoken, voices)
             except base.OutOfMemory:
                 if self.batch_size == 1:
                     raise
@@ -100,14 +106,33 @@ class Runner:
                 continue
             if len(audios) != len(chunk):
                 raise RuntimeError(f"engine '{engine.name}' returned {len(audios)} results for {len(chunk)} lines")
-            for line, a in zip(chunk, audios, strict=True):
-                y = audio.pad_lead_in(a.samples, a.sample_rate)
-                take = Candidate(line, y, a.sample_rate, voices.get(line.voice))
+            for line, said, a in zip(chunk, spoken, audios, strict=True):
+                samples = a.samples
+                checked = line
+                if said is not line and tricks and primer.wants_double(line):  # doubled: keep the first time, check that
+                    from voicecrucible.checks.words import words
+                    cut = primer.double_cut(samples, a.sample_rate, self._checks.word_times(samples, a.sample_rate),
+                                            len(words(line.text)))
+                    if cut is not None and int(0.2 * a.sample_rate) < cut < len(samples) - int(0.2 * a.sample_rate):
+                        samples = audio.cut_end(samples, a.sample_rate, cut / a.sample_rate)
+                    else:  # no clean cut: the doubled take ("Ow! Ow!") is checked and may be used as it is
+                        _log.info("%s take %d: kept doubled (no cut found)", line.label, line.attempt)
+                        checked = said
+                elif said is not line:  # primed: cut "Okay" and the pause off, check what is left
+                    cut = primer.cut_point(samples, a.sample_rate, self._checks.word_times(samples, a.sample_rate))
+                    if cut is None or cut >= len(samples) - int(0.2 * a.sample_rate):
+                        _log.info("%s take %d: the primer could not be cut off", line.label, line.attempt)
+                        results.append(TakeResult(line.uid, False, reason="primer: no cut found", ext=self.output_format))
+                        continue
+                    samples = audio.trim_start(samples, a.sample_rate, cut / a.sample_rate)[
+                        int(audio.LEAD_IN_SECONDS * a.sample_rate):]  # pad_lead_in below adds the lead-in once
+                y = audio.pad_lead_in(samples, a.sample_rate)
+                take = Candidate(checked, y, a.sample_rate, voices.get(line.voice))
                 checks = self._checks.run(take)
                 passed, reason = summary(checks)
                 score = next((c.score for c in checks if c.check == "quality" and c.score is not None), 0.0)
                 if not passed:
-                    _log.info("%s take %d rejected: %s", line.file_stem, line.attempt, reason)
+                    _log.info("%s take %d rejected: %s", line.label, line.attempt, reason)
                 results.append(TakeResult(line.uid, passed, reason=reason, ext=self.output_format, score=score,
                                           audio=audio.encode(y, a.sample_rate, self.output_format)))
             i += len(chunk)

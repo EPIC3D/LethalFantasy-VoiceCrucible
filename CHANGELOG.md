@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.1.0b10 – 2026-11-27
+
+Tested on Windows 11 with an NVIDIA RTX 40 (8 GB) and an RTX 50 (16 GB) series card against LethalFantasy beta 1.0.3:
+a full default pack (~6,370 lines, Chatterbox, two PCs), the whole game directed by a local `qwen3:14b`, Breeze on the
+16 GB card. **Update the workers too** – most fixes below run on the worker. The cloud director is untested.
+
+**New**
+- **AI director with a local model** (`crucible direct`): Ollama or any OpenAI-compatible API (cloud: untested; key
+  only from an environment variable, asks before game text leaves your network). Scenes are sent in parts of 8 lines,
+  long scenes with only the nearby lines; random alternatives of a scene are marked as separate moments, not one
+  conversation. `--render` renders the directed scenes while the rest is still being directed; the worker on the
+  directing PC waits and joins in afterwards (the model is unloaded). `--notes` adds the translators' notes.
+  Directions now include an **energy** (1–5) and a **pace**, used by every engine. Guide: docs/DIRECTOR.md.
+- **Breeze TTS 2 engine** (optional component in `setup.cmd`, 12 GB+ GPU; model and generated audio are licensed for
+  non-commercial use only): a clean voice cloned from a reference clip that reads a fixed text, acted from the long
+  written direction. `crucible reference` makes those reference clips with Chatterbox. Workers with too little VRAM
+  never get Breeze lines. Short lines (up to 5 words) get a short instruction with the strength spelled out and a
+  short reference – with the long ones Breeze spoke parts of them aloud. The instruction asks to keep the
+  reference's accent.
+- Watcher: **Directing** progress, **GPU temperature** and thermal slowdown per worker, **line IDs** (`#1234`) in
+  Finished lines and Problems (searchable, also in the logs), **search** in Problems (all problems, not only the
+  newest), a scrolling Problems list, **Cut after here** in the take editor.
+- Guides: **docs/WATCHER.md** (every panel and button, the whole workflow as a chart) and docs/DIRECTOR.md; docs/GPU.md
+  has measured times for a whole pack per engine.
+
+**Better takes**
+- Chatterbox retakes: lines of 3+ words are spoken as "Okay... <line>" and the "Okay" is cut off; one- and two-word
+  lines are spoken twice and the second time is cut off ("Squish! Squish!"); short one-word lines are stretched
+  ("Heeey!"). Breeze and Qwen retakes stay plain (a primed Breeze retake lost its acting).
+- Written-out sighs and gasps at the start of a line are acted ("Sigh…" → a sigh), "ok" is read as "okay".
+- Lines that are not spoken in the game are no longer voiced: reward notices, the affection title words, minigame
+  buttons and the player's requests in it, the player's choices in the nightgown event.
+
+**Checks**
+- Strong emotions (shouting, strain, tears) have their own looser limits (`intense_*` in `[checks]`); an engine can set
+  its own limits per line (Breeze: voice match 0.72).
+- The speech recogniser gets only the names of the line as a spelling hint – with all names it wrote a well spoken
+  name as the other twin's.
+- A left-over "Okay" of a retake fails; "Jeez" = "Geez"; quote marks around a word no longer count as a different word.
+
+**Fixes**
+- Redo always renders a new take (after a failed re-check it gave the same take again).
+- Time left: shown as "estimating…" until the first lines are done; the clock starts with the first batch.
+- Redo window: the exaggeration / cfg_weight sliders are shown only for Chatterbox lines (others showed a made-up 0.5).
+- The bundled `lethalfantasy` profile also has the Breeze reference clips and their texts.
+
 ## 0.1.0b9 – 2026-11-22
 
 Tested on Windows 11 with an NVIDIA RTX 40 series card (coordinator, watcher, worker and re-check on one PC), against

@@ -58,3 +58,18 @@ zip_sha256 = "72a27a1d20efec1489041eac2854e3e1c9c23d650ac15900821ad3ab367f0290"
 requirements = "components/seedvc/requirements.txt"
 overrides = "components/seedvc/overrides.txt"
 python = "3.12"
+folder = "seed-vc"
+
+[components.breeze]
+title = "Breeze TTS 2 engine (clean voice + director's acting; needs a 12 GB+ GPU) – OPTIONAL"
+extras = []
+license = "Code: Apache-2.0. Model weights AND generated audio: BreezeBlue Research and Non-Commercial License – free for personal / hobby / non-commercial use only, never for sale"
+source = "https://github.com/breezeblue-ai/breeze-tts (pinned commit below); model: huggingface.co/BreezeBlue/Breeze-TTS-2 (downloaded on first use, 7.7 GB)"
+download_gb = 11.0
+disk_gb = 13.0
+commit = "a43d19e718b322e1cb3b2aa66f6d37d7945f4b21"
+zip_url = "https://codeload.github.com/breezeblue-ai/breeze-tts/zip/a43d19e718b322e1cb3b2aa66f6d37d7945f4b21"
+zip_sha256 = "7499519de8a5f563087032134958c5772ff7f58e9be7da7b9415f37200051c7b"
+requirements = "components/breeze/requirements.txt"
+python = "3.12"
+folder = "breeze"

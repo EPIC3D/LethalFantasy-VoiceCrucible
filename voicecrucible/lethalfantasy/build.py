@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from voicecrucible.checks.words import speechless
+from voicecrucible.checks.words import speechless, words
 from voicecrucible.core import languages
 from voicecrucible.core.jobs import Line
 from voicecrucible.lethalfantasy import emotions, filters, naming
@@ -28,7 +28,10 @@ class BuildResult:
 
 
 def reference_voice(profile: Profile, character: str, engine: str) -> Path | None:
-    """The engine's reference voice of a character, else the Chatterbox one (used for the similarity check)."""
+    """The engine's reference voice of a character, else the Chatterbox one (used for the similarity check).
+    Breeze has no fallback: its reference must say the profile's reference_text word for word."""
+    if engine == "breeze":
+        return profile.voice(character, engine) if profile.reference_text else None
     return profile.voice(character, engine) or profile.voice(character, "chatterbox")
 
 
@@ -67,7 +70,18 @@ def build(profile: Profile, source: list[SourceLine], engine: str, directions: d
             line_params = params
             if language == "en" and (say := profile.sounds.find(spoken, src.expression)) and speechless(spoken):
                 line_params = {**params, "last_take_text": say}  # a hum or a laugh: its last take says this
+            voice = asset_ids.get(ref, "")
+            if engine == "breeze" and len(words(spoken)) <= emotions.BREEZE_SHORT_WORDS:
+                # short lines (up to 5 words): a short instruction and a short reference – with the long ones Breeze
+                # spoke parts of them after the word (heard: the reference text, made-up words)
+                line_params = {**line_params, "instruction": emotions.breeze_short_instruction(
+                    profile, src.expression, directions.get(src.key))}
+                short = ref.with_name(ref.stem + ".short" + ref.suffix)
+                if short.exists() and profile.reference_text_short:
+                    if short not in asset_ids:
+                        asset_ids[short] = add_asset(short)
+                    voice, line_params = asset_ids[short], {**line_params, "ref_text": profile.reference_text_short}
             result.lines.append(Line(key=src.key, character=ch.folder, text=spoken, emotion=src.expression,
                                      direction=directions.get(src.key, {}).get("delivery", ""), variant=variant,
-                                     voice=asset_ids.get(ref, ""), params=line_params))
+                                     voice=voice, params=line_params))
     return result

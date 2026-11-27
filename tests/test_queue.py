@@ -82,3 +82,32 @@ def test_lost_worker_lease_expires_and_heartbeat_extends(tmp_path):
     time.sleep(0.6)
     assert q.expire() == 1
     assert q.counts() == {"pending": 4, "leased": 1, "done": 0, "failed": 0}
+
+
+def test_claim_skips_engines_the_worker_cannot_run(tmp_path):
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("breeze", [Line(key="B0", character="MIRA", text="hi")])
+    q.add("chatterbox", [Line(key="C0", character="MIRA", text="hi")])
+    small = q.claim("small_gpu", 4, frozenset({"breeze"}))
+    assert small.engine == "chatterbox" and [ln.key for ln in small.lines] == ["C0"]
+    q.finish(small.job_id, small.lines[0].uid, True, output="c0.ogg")
+    assert q.claim("small_gpu", 4, frozenset({"breeze"})) is None  # the breeze line waits for a big worker
+    assert q.claim("big_gpu", 4).engine == "breeze"
+
+
+def test_uid_search():
+    from voicecrucible.core.queue import _uid_query
+    assert _uid_query(" #1234 ") == 1234
+    assert _uid_query("1234") is None and _uid_query("#abc") is None
+
+
+def test_redo_after_a_failed_recheck_gives_a_new_take(tmp_path):
+    from voicecrucible.core.queue import JobQueue
+    from voicecrucible.core.jobs import Line
+    q = JobQueue(tmp_path / "q.sqlite")
+    q.add("test", [Line(key="K", character="A", text="Hello there")])
+    uid = q._db.execute("SELECT uid FROM lines").fetchone()[0]
+    q._db.execute("UPDATE lines SET status = 'failed', attempts = 0 WHERE uid = ?", (uid,))
+    before = q._db.execute("SELECT takes_before FROM lines WHERE uid = ?", (uid,)).fetchone()[0]
+    q.redo(uid)
+    assert q._db.execute("SELECT takes_before FROM lines WHERE uid = ?", (uid,)).fetchone()[0] == before + 1

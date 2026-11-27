@@ -5,7 +5,7 @@ Settings: min_mos (2.0). The model code comes from torch.hub, pinned to tarepan/
 
 from __future__ import annotations
 
-from voicecrucible.checks.base import CHECK_RATE, Candidate, Check
+from voicecrucible.checks.base import CHECK_RATE, Candidate, Check, limit as limit_for
 from voicecrucible.core.jobs import CheckResult
 
 _HUB_REPO = "tarepan/SpeechMOS:v1.2.0"
@@ -29,7 +29,7 @@ class QualityCheck(Check):
         with self._torch.no_grad():
             wave = self._torch.from_numpy(take.audio16k).unsqueeze(0).to(self._device)
             mos = float(self._model(wave, CHECK_RATE).item())
-        limit = self.settings.get("min_mos", 2.0)
+        limit = limit_for(self.settings, take.line, "min_mos", 2.0)
         return CheckResult(self.name, mos >= limit, f"poor audio (MOS {mos:.2f} < {limit})" if mos < limit else "",
                            round(mos, 3))
 
